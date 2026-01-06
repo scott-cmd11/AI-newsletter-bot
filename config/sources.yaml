@@ -1,45 +1,162 @@
 # AI Newsletter Bot - Source Configuration
-# Add your article sources and topics of interest here
+# =========================================
+# Customize your newsletter sources and preferences here
 
-# Topics to track
-topics:
-  - artificial intelligence
-  - machine learning
-  - large language models
-  - generative AI
-  - AI ethics
-  - AI in business
+# Newsletter Settings
+newsletter:
+  name: "AI This Week"
+  tagline: "Key AI Developments You Should Know"
+  # Run by Thursday to send on Friday
+  target_day: "Thursday"
+  send_day: "Friday"
+  max_articles: 8  # Number of key developments to include
 
-# RSS Feeds to monitor
+# Google Alerts RSS Feeds
+# -----------------------
+# Add your Google Alerts RSS feed URLs here
+# To get the RSS URL: Google Alerts > Click the pencil icon > "Deliver to: RSS feed"
+google_alerts:
+  - name: "AI Canada"
+    url: ""  # Paste your Google Alert RSS URL here
+    priority: high
+    
+  - name: "Artificial Intelligence"
+    url: ""  # Paste your Google Alert RSS URL here
+    priority: medium
+    
+  - name: "Machine Learning"
+    url: ""  # Paste your Google Alert RSS URL here
+    priority: medium
+
+# Additional RSS Feeds (optional)
+# -------------------------------
 rss_feeds:
-  - name: "MIT Technology Review - AI"
-    url: "https://www.technologyreview.com/feed/"
+  # Canadian AI Sources
+  - name: "Vector Institute"
+    url: "https://vectorinstitute.ai/feed/"
+    priority: high
     category: "research"
-  
+    
+  - name: "CIFAR AI"
+    url: "https://cifar.ca/feed/"
+    priority: high
+    category: "research"
+    
+  # Major AI Labs
   - name: "OpenAI Blog"
     url: "https://openai.com/blog/rss.xml"
+    priority: medium
     category: "industry"
-  
+    
   - name: "Google AI Blog"
     url: "https://blog.google/technology/ai/rss/"
+    priority: medium
+    category: "industry"
+    
+  - name: "Anthropic"
+    url: "https://www.anthropic.com/rss.xml"
+    priority: medium
     category: "industry"
 
-# Keywords to prioritize (articles with these get higher scores)
-priority_keywords:
-  - breakthrough
-  - launch
-  - release
-  - announcement
-  - research paper
-  - study
+# Topic Categories for Classification
+# ------------------------------------
+topics:
+  governance:
+    keywords:
+      - regulation
+      - policy
+      - ethics
+      - legislation
+      - government
+      - privacy
+      - safety
+      - responsible AI
+      - Bill C-27
+      - AIDA
+    priority_boost: 1.5
+    
+  capabilities:
+    keywords:
+      - breakthrough
+      - benchmark
+      - performance
+      - GPT
+      - Claude
+      - Gemini
+      - model release
+      - state-of-the-art
+    priority_boost: 1.3
+    
+  business:
+    keywords:
+      - enterprise
+      - adoption
+      - investment
+      - startup
+      - funding
+      - partnership
+      - deployment
+    priority_boost: 1.0
+    
+  education:
+    keywords:
+      - training
+      - course
+      - university
+      - research
+      - academic
+      - learning
+      - workforce
+    priority_boost: 1.0
+    
+  tools:
+    keywords:
+      - tool
+      - app
+      - platform
+      - launch
+      - release
+      - product
+    priority_boost: 1.2
 
-# Keywords to filter out (skip articles with these)
-exclude_keywords:
+# Canadian Content Boost
+# ----------------------
+# Articles mentioning these get higher priority
+canadian_keywords:
+  - Canada
+  - Canadian
+  - Toronto
+  - Montreal
+  - Vancouver
+  - Ottawa
+  - Alberta
+  - Ontario
+  - Quebec
+  - British Columbia
+  - federal
+  - CIFAR
+  - Vector Institute
+  - Mila
+  - Amii
+
+canadian_boost: 2.0  # Multiplier for Canadian content
+
+# Filters
+# -------
+# Skip articles matching these patterns
+exclude_patterns:
   - sponsored
   - advertisement
+  - [PR]
+  - press release
 
-# Number of articles to include in newsletter
-max_articles: 10
-
-# Article age limit (days)
+# Article age limit (days from today)
 max_age_days: 7
+
+# Gemini API Settings
+# -------------------
+gemini:
+  model: "gemini-1.5-flash"
+  summary_style: "analytical"  # analytical, brief, detailed
+  include_commentary: true
+  max_summary_length: 150  # words
