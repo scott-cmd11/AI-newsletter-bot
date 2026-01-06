@@ -1,0 +1,45 @@
+# AI Newsletter Bot - Source Configuration
+# Add your article sources and topics of interest here
+
+# Topics to track
+topics:
+  - artificial intelligence
+  - machine learning
+  - large language models
+  - generative AI
+  - AI ethics
+  - AI in business
+
+# RSS Feeds to monitor
+rss_feeds:
+  - name: "MIT Technology Review - AI"
+    url: "https://www.technologyreview.com/feed/"
+    category: "research"
+  
+  - name: "OpenAI Blog"
+    url: "https://openai.com/blog/rss.xml"
+    category: "industry"
+  
+  - name: "Google AI Blog"
+    url: "https://blog.google/technology/ai/rss/"
+    category: "industry"
+
+# Keywords to prioritize (articles with these get higher scores)
+priority_keywords:
+  - breakthrough
+  - launch
+  - release
+  - announcement
+  - research paper
+  - study
+
+# Keywords to filter out (skip articles with these)
+exclude_keywords:
+  - sponsored
+  - advertisement
+
+# Number of articles to include in newsletter
+max_articles: 10
+
+# Article age limit (days)
+max_age_days: 7
