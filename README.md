@@ -22,7 +22,7 @@ C:\Users\scott\.gemini\antigravity\scratch\AI-newsletter-bot
    ```powershell
    cd C:\Users\scott\.gemini\antigravity\scratch\AI-newsletter-bot
    .\venv\Scripts\Activate
-   $env:GEMINI_API_KEY='AIzaSyBk0Xo4Awbsje-ku3v-MN1ICS7hY7fsC1E'
+   $env:GEMINI_API_KEY='YOUR_API_KEY_HERE'
    python src/web.py
    ```
 
@@ -35,7 +35,7 @@ C:\Users\scott\.gemini\antigravity\scratch\AI-newsletter-bot
 ```powershell
 cd C:\Users\scott\.gemini\antigravity\scratch\AI-newsletter-bot
 .\venv\Scripts\Activate
-$env:GEMINI_API_KEY='AIzaSyBk0Xo4Awbsje-ku3v-MN1ICS7hY7fsC1E'
+$env:GEMINI_API_KEY='YOUR_API_KEY_HERE'
 
 # Step 1: Fetch articles
 python src/cli.py scout
@@ -46,6 +46,17 @@ python src/cli.py curate
 # Step 3: Generate newsletter
 python src/cli.py compose --preview
 ```
+
+---
+
+## 🔑 API Key Setup
+
+Your Gemini API key is stored securely in Google AI Studio:
+1. Go to https://aistudio.google.com/app/apikey
+2. Copy your key from "Scott's Dev Wallet"
+3. Set it as an environment variable (never commit to git!)
+
+**⚠️ SECURITY:** Never commit your API key to git. Always use environment variables.
 
 ---
 
@@ -87,16 +98,6 @@ To have articles ready every morning:
 4. Trigger: **Daily** at **11:00 PM**
 5. Action: **Start a program**
 6. Program: `C:\Users\scott\.gemini\antigravity\scratch\AI-newsletter-bot\run_scout.bat`
-
----
-
-## 🔑 Your Gemini API Key
-
-```
-AIzaSyBk0Xo4Awbsje-ku3v-MN1ICS7hY7fsC1E
-```
-
-This is your free Gemini API key. Keep it private.
 
 ---
 
