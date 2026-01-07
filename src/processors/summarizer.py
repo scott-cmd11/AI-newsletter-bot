@@ -98,7 +98,7 @@ REQUIREMENTS:
 {"ALSO: Add a 'Commentary' section (2-3 sentences) with your analytical perspective on why this development matters and what readers should watch for." if include_commentary else ""}
 
 Respond in JSON format:
-{
+{{
     "summary": "Your concise summary here (exactly 3-4 sentences)...",
     "commentary": "Your analytical commentary here (2-3 sentences)...",
     "read_time": "X min read"
