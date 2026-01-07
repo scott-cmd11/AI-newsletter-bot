@@ -25,6 +25,7 @@ from processors.summarizer import summarize_articles, generate_theme_of_week
 from formatters.email_formatter import format_newsletter_html, save_newsletter
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -611,10 +612,16 @@ if __name__ == '__main__':
     print("\n" + "=" * 50)
     print("🤖 AI Newsletter Bot - Web Interface")
     print("=" * 50)
-    print("\n🌐 Opening browser at http://127.0.0.1:5000\n")
     
-    # Open browser after a short delay
-    Timer(1.5, open_browser).start()
+    # Check if running locally (not on cloud)
+    port = int(os.environ.get('PORT', 5000))
+    is_local = port == 5000 and not os.environ.get('RENDER')
+    
+    if is_local:
+        print(f"\n🌐 Opening browser at http://127.0.0.1:{port}\n")
+        Timer(1.5, open_browser).start()
+    else:
+        print(f"\n🌐 Running on port {port}\n")
     
     # Run Flask
-    app.run(debug=False, port=5000)
+    app.run(debug=False, host='0.0.0.0', port=port)

@@ -14,6 +14,7 @@ jinja2>=3.1.0
 
 # Web interface
 flask>=3.0.0
+gunicorn>=21.0.0
 
 # Utilities
 python-dateutil>=2.8.0
