@@ -80,10 +80,10 @@ Source: {article.source}
 Category: {article.category or 'General'}
 Original Content: {article.summary}
 
-Your task is to write a detailed, insightful summary for newsletter readers.
+Your task is to write a concise, insightful summary for newsletter readers.
 
 REQUIREMENTS:
-1. Write approximately {max_length} words - be thorough and substantive
+1. Write EXACTLY 3-4 sentences - be concise and substantive
 2. {style_instructions.get(style, style_instructions['detailed'])}
 3. Include:
    - The core news/development
@@ -98,8 +98,8 @@ REQUIREMENTS:
 {"ALSO: Add a 'Commentary' section (2-3 sentences) with your analytical perspective on why this development matters and what readers should watch for." if include_commentary else ""}
 
 Respond in JSON format:
-{{
-    "summary": "Your detailed summary here (approximately {max_length} words)...",
+{
+    "summary": "Your concise summary here (exactly 3-4 sentences)...",
     "commentary": "Your analytical commentary here (2-3 sentences)...",
     "read_time": "X min read"
 }}
