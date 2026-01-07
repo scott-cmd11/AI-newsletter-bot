@@ -68,6 +68,13 @@ def summarize_article(article: Article, config: dict) -> Article:
     
     prompt = f"""You are a senior technology analyst writing for "AI This Week", a professional newsletter for Canadian AI professionals, executives, and policymakers.
 
+YOUR WRITING STYLE:
+- Voice: Professional technology analyst with expertise in AI governance
+- Tone: Analytical and insightful, avoiding hype and marketing speak
+- Focus on WHY developments matter, not just WHAT happened
+- Include Canadian context and relevance when applicable
+- Highlight implications for policy and business decisions
+
 Article Title: {article.title}
 Source: {article.source}
 Category: {article.category or 'General'}
@@ -86,13 +93,15 @@ REQUIREMENTS:
    - Canadian relevance if applicable
 4. Write in a professional, analytical tone - not hype or marketing speak
 5. Use clear, readable prose (not bullet points)
+6. Estimate reading time based on word count (assume 200 words per minute)
 
 {"ALSO: Add a 'Commentary' section (2-3 sentences) with your analytical perspective on why this development matters and what readers should watch for." if include_commentary else ""}
 
 Respond in JSON format:
 {{
     "summary": "Your detailed summary here (approximately {max_length} words)...",
-    "commentary": "Your analytical commentary here (2-3 sentences)..." 
+    "commentary": "Your analytical commentary here (2-3 sentences)...",
+    "read_time": "X min read"
 }}
 """
 
@@ -210,3 +219,66 @@ Respond in JSON:
     except Exception as e:
         print(f"⚠️  Deep dive suggestion error: {e}")
         return {"topic": "AI Governance Trends", "reasoning": "Default suggestion"}
+
+
+def generate_theme_of_week(articles: List[Article], config: dict) -> dict:
+    """
+    Generate a "Theme of the Week" - an editorial synthesis of the common
+    thread across selected articles.
+    
+    Returns:
+        Dictionary with theme title and editorial content
+    """
+    if not GEMINI_AVAILABLE or not init_gemini():
+        return {"title": "", "content": "", "enabled": False}
+    
+    theme_config = config.get('theme_of_week', {})
+    if not theme_config.get('enabled', True):
+        return {"title": "", "content": "", "enabled": False}
+    
+    length = theme_config.get('length', 150)
+    
+    # Build article summaries for analysis
+    articles_text = "\n".join([
+        f"- [{a.category}] {a.title}: {a.summary[:200]}..." 
+        for a in articles[:8]
+    ])
+    
+    prompt = f"""You are the editor of "AI This Week", a professional newsletter for Canadian AI professionals and policymakers.
+
+This week's selected articles:
+{articles_text}
+
+Write a "THEME OF THE WEEK" - an editorial insight (approximately {length} words) that:
+1. Identifies the common thread or overarching narrative across these articles
+2. Provides YOUR analytical perspective on what this week's news means for the AI landscape
+3. Offers a forward-looking insight or question for readers to consider
+4. Speaks directly to Canadian professionals and decision-makers
+
+Write in first person ("This week, I noticed..." or "What strikes me about...").
+Be insightful and thought-provoking, not just a summary.
+
+Respond in JSON:
+{{
+    "title": "A compelling 5-8 word title for this week's theme",
+    "content": "Your {length}-word editorial insight..."
+}}
+"""
+
+    try:
+        model = genai.GenerativeModel(config.get('gemini', {}).get('model', 'gemini-1.5-flash'))
+        response = model.generate_content(prompt)
+        
+        response_text = response.text.strip()
+        if response_text.startswith('```'):
+            response_text = response_text.split('```')[1]
+            if response_text.startswith('json'):
+                response_text = response_text[4:]
+        
+        result = json.loads(response_text)
+        result['enabled'] = True
+        return result
+        
+    except Exception as e:
+        print(f"⚠️  Theme of week generation error: {e}")
+        return {"title": "", "content": "", "enabled": False}

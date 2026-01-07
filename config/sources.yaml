@@ -243,3 +243,31 @@ gemini:
   summary_style: "detailed"  # analytical, brief, detailed
   include_commentary: true
   max_summary_length: 300  # words - detailed summaries like original newsletter
+
+# Style Personalization
+# ---------------------
+# Your unique voice and writing preferences
+style:
+  voice: "Professional technology analyst with expertise in AI governance"
+  tone: "Analytical and insightful, avoiding hype and marketing speak"
+  audience: "Canadian AI professionals, executives, and policymakers"
+  focus_areas:
+    - AI governance and regulation
+    - Canadian AI developments
+    - Practical business implications
+    - Emerging capabilities and their impact
+  writing_guidelines:
+    - "Focus on WHY developments matter, not just WHAT happened"
+    - "Include Canadian context and relevance when applicable"
+    - "Highlight implications for policy and business decisions"
+    - "Use data and specific examples when available"
+    - "Maintain objectivity while providing informed analysis"
+
+# Theme of the Week
+# -----------------
+# AI will synthesize a common thread across selected articles
+theme_of_week:
+  enabled: true
+  length: 150  # words
+  style: "An editorial insight that connects the week's major themes"
+

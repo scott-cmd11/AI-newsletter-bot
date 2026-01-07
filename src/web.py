@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from sources.rss_fetcher import fetch_all_articles, Article
 from processors.scorer import score_articles
-from processors.summarizer import summarize_articles
+from processors.summarizer import summarize_articles, generate_theme_of_week
 from formatters.email_formatter import format_newsletter_html, save_newsletter
 
 app = Flask(__name__)
@@ -575,11 +575,14 @@ def generate():
     
     # Generate AI summaries if API key available
     api_key = os.getenv('GEMINI_API_KEY')
+    theme_of_week = None
     if api_key:
         articles = summarize_articles(articles, config)
+        # Generate Theme of the Week
+        theme_of_week = generate_theme_of_week(articles, config)
     
     # Generate HTML
-    html = format_newsletter_html(articles, config)
+    html = format_newsletter_html(articles, config, theme_of_week=theme_of_week)
     
     # Save newsletter
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
