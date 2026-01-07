@@ -637,6 +637,16 @@ def preview():
     return "No newsletter generated yet."
 
 
+@app.route('/health')
+def health():
+    """Health check endpoint (no auth required)."""
+    return jsonify({
+        "status": "ok",
+        "auth_configured": bool(AUTH_PASSWORD),
+        "auth_password_length": len(AUTH_PASSWORD) if AUTH_PASSWORD else 0
+    })
+
+
 def open_browser():
     webbrowser.open('http://127.0.0.1:5000')
 
