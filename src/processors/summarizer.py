@@ -205,7 +205,8 @@ Respond in JSON:
 """
 
     try:
-        model = genai.GenerativeModel(config.get('gemini', {}).get('model', 'gemini-1.5-flash'))
+        model_name = config.get('gemini', {}).get('model', 'models/gemini-2.0-flash')
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
         
         response_text = response.text.strip()
@@ -266,7 +267,8 @@ Respond in JSON:
 """
 
     try:
-        model = genai.GenerativeModel(config.get('gemini', {}).get('model', 'gemini-1.5-flash'))
+        model_name = config.get('gemini', {}).get('model', 'models/gemini-2.0-flash')
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
         
         response_text = response.text.strip()

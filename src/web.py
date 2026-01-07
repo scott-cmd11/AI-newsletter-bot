@@ -613,8 +613,11 @@ def generate():
         articles = summarize_articles(articles, config)
         # Generate Theme of the Week
         theme_of_week = generate_theme_of_week(articles, config)
+        if theme_of_week:
+            theme_of_week['enabled'] = theme_of_week.get('enabled', True)
     
     # Generate HTML
+    # We need to pass theme_of_week if it was generated
     html = format_newsletter_html(articles, config, theme_of_week=theme_of_week)
     
     # Save newsletter
