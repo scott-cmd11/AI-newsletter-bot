@@ -2,13 +2,13 @@
 """
 Email Formatting Module
 
-Generates Outlook-compatible HTML emails from processed articles.
+Generates Outlook-compatible HTML emails matching the "AI This Week" style.
+Uses a table-based layout for proper rendering in Outlook.
 """
 
 from typing import List
 from datetime import datetime
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader
 
 # Import from parent
 import sys
@@ -16,17 +16,18 @@ sys.path.append(str(Path(__file__).parent.parent))
 from sources.rss_fetcher import Article
 
 
-def get_category_color(category: str) -> str:
-    """Get accent color for article category."""
-    colors = {
-        'governance': '#8B5CF6',      # Purple
-        'capabilities': '#3B82F6',    # Blue  
-        'business': '#10B981',        # Green
-        'education': '#F59E0B',       # Amber
-        'tools': '#EC4899',           # Pink
-        'research': '#6366F1',        # Indigo
+def get_category_emoji(category: str) -> str:
+    """Get emoji for article category."""
+    emojis = {
+        'governance': '⚖️',
+        'capabilities': '🚀',
+        'business': '💼',
+        'education': '📚',
+        'tools': '🛠️',
+        'research': '🔬',
+        'uncategorized': '📰'
     }
-    return colors.get(category.lower(), '#6B7280')  # Gray default
+    return emojis.get(category.lower(), '📰')
 
 
 def format_date(dt: datetime) -> str:
@@ -41,17 +42,10 @@ def format_newsletter_html(articles: List[Article], config: dict,
                            learning_items: List[dict] = None,
                            deep_dive: dict = None) -> str:
     """
-    Generate complete newsletter HTML.
+    Generate complete newsletter HTML matching AI This Week style.
     
-    Args:
-        articles: List of scored and summarized articles
-        config: Newsletter configuration
-        tool_of_week: Optional tool of the week data
-        learning_items: Optional list of learning resources
-        deep_dive: Optional deep dive topic data
-        
-    Returns:
-        Complete HTML string ready for Outlook
+    Uses table-based layout with category headers, similar to the user's
+    original newsletter format.
     """
     newsletter_config = config.get('newsletter', {})
     newsletter_name = newsletter_config.get('name', 'AI This Week')
@@ -60,66 +54,78 @@ def format_newsletter_html(articles: List[Article], config: dict,
     today = datetime.now()
     week_of = format_date(today)
     
-    # Build articles HTML
-    articles_html = ""
+    # Group articles by category
+    categories = {}
     for article in articles:
-        category_color = get_category_color(article.category)
-        summary = article.ai_summary if article.ai_summary else article.summary
-        commentary = article.ai_commentary
+        cat = article.category or "uncategorized"
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(article)
+    
+    # Build articles HTML - organized by category
+    articles_html = ""
+    
+    for cat in ['governance', 'capabilities', 'business', 'education', 'tools', 'research', 'uncategorized']:
+        if cat not in categories:
+            continue
+            
+        cat_articles = categories[cat]
+        emoji = get_category_emoji(cat)
         
+        # Category header
         articles_html += f'''
         <tr>
-            <td style="padding: 15px 30px;">
+            <td style="padding: 20px 30px 10px 30px; background-color: #f8f9fa; border-top: 3px solid #1a1a2e;">
+                <h3 style="color: #1a1a2e; margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">
+                    {emoji} {cat.title()}
+                </h3>
+            </td>
+        </tr>
+        '''
+        
+        # Articles in this category
+        for article in cat_articles:
+            summary = article.ai_summary if article.ai_summary else article.summary
+            commentary = article.ai_commentary if hasattr(article, 'ai_commentary') else ""
+            
+            # Truncate summary if too long
+            if len(summary) > 300:
+                summary = summary[:297] + "..."
+            
+            articles_html += f'''
+        <tr>
+            <td style="padding: 15px 30px; border-bottom: 1px solid #eee;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
-                        <td style="border-left: 4px solid {category_color}; padding-left: 15px;">
-                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                                <tr>
-                                    <td>
-                                        <span style="display: inline-block; background-color: {category_color}; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; text-transform: uppercase; margin-bottom: 8px;">{article.category or 'News'}</span>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="padding-top: 5px;">
-                                        <a href="{article.url}" style="color: #1a1a1a; text-decoration: none; font-size: 18px; font-weight: bold; line-height: 1.3;">{article.title}</a>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="padding-top: 10px;">
-                                        <p style="color: #4a4a4a; margin: 0; font-size: 14px; line-height: 1.6;">{summary}</p>
-                                        {f'<p style="color: #6a6a6a; margin: 10px 0 0 0; font-size: 13px; font-style: italic; line-height: 1.5;">💡 {commentary}</p>' if commentary else ''}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="padding-top: 10px;">
-                                        <span style="color: #888888; font-size: 12px;">{article.source}</span>
-                                        <span style="color: #cccccc; font-size: 12px;"> • </span>
-                                        <span style="color: #888888; font-size: 12px;">{format_date(article.published)}</span>
-                                        <span style="color: #cccccc; font-size: 12px;"> • </span>
-                                        <a href="{article.url}" style="color: #667eea; text-decoration: none; font-size: 12px;">Read more →</a>
-                                    </td>
-                                </tr>
-                            </table>
+                        <td valign="top" width="100%">
+                            <a href="{article.url}" style="color: #1a1a2e; text-decoration: none; font-size: 16px; font-weight: 600; line-height: 1.4; display: block; margin-bottom: 8px;">{article.title}</a>
+                            <p style="color: #444444; margin: 0 0 8px 0; font-size: 14px; line-height: 1.6;">{summary}</p>
+                            {f'<p style="color: #666666; margin: 0 0 8px 0; font-size: 13px; line-height: 1.5; font-style: italic; border-left: 2px solid #667eea; padding-left: 10px;">💡 {commentary}</p>' if commentary else ''}
+                            <p style="margin: 0;">
+                                <span style="color: #888888; font-size: 12px;">{article.source}</span>
+                                <span style="color: #cccccc;"> | </span>
+                                <a href="{article.url}" style="color: #667eea; text-decoration: none; font-size: 12px; font-weight: 500;">Read more →</a>
+                            </p>
                         </td>
                     </tr>
                 </table>
             </td>
         </tr>
-        '''
+            '''
     
     # Tool of the Week section
     tool_html = ""
     if tool_of_week:
         tool_html = f'''
         <tr>
-            <td style="padding: 20px 30px; background-color: #f8f9fa;">
+            <td style="padding: 25px 30px; background-color: #1a1a2e;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                     <tr>
                         <td>
-                            <h2 style="color: #333333; margin: 0 0 15px 0; font-size: 18px;">🛠️ Tool of the Week</h2>
-                            <h3 style="color: #667eea; margin: 0 0 10px 0; font-size: 16px;">{tool_of_week.get('name', '')}</h3>
-                            <p style="color: #4a4a4a; margin: 0; font-size: 14px; line-height: 1.5;">{tool_of_week.get('description', '')}</p>
-                            <a href="{tool_of_week.get('url', '#')}" style="display: inline-block; margin-top: 10px; color: #667eea; text-decoration: none; font-size: 13px;">Try it →</a>
+                            <h2 style="color: #ffffff; margin: 0 0 15px 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">🛠️ Tool of the Week</h2>
+                            <h3 style="color: #667eea; margin: 0 0 10px 0; font-size: 18px;">{tool_of_week.get('name', '')}</h3>
+                            <p style="color: #cccccc; margin: 0 0 15px 0; font-size: 14px; line-height: 1.5;">{tool_of_week.get('description', '')}</p>
+                            <a href="{tool_of_week.get('url', '#')}" style="display: inline-block; background-color: #667eea; color: white; padding: 8px 20px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: 500;">Try it →</a>
                         </td>
                     </tr>
                 </table>
@@ -130,27 +136,17 @@ def format_newsletter_html(articles: List[Article], config: dict,
     # Learning section
     learning_html = ""
     if learning_items:
-        items = "".join([f'<li style="margin-bottom: 8px;">{item.get("title", "")} - <a href="{item.get("url", "#")}" style="color: #667eea;">{item.get("type", "Link")}</a></li>' for item in learning_items])
+        items = "".join([
+            f'<tr><td style="padding: 8px 0;"><span style="color: #667eea; font-weight: bold;">▸</span> {item.get("title", "")} — <a href="{item.get("url", "#")}" style="color: #667eea; text-decoration: none;">{item.get("type", "Link")}</a></td></tr>' 
+            for item in learning_items
+        ])
         learning_html = f'''
         <tr>
-            <td style="padding: 20px 30px;">
-                <h2 style="color: #333333; margin: 0 0 15px 0; font-size: 18px;">📚 Learning</h2>
-                <ul style="color: #4a4a4a; margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6;">
+            <td style="padding: 25px 30px; background-color: #f8f9fa;">
+                <h2 style="color: #1a1a2e; margin: 0 0 15px 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">📚 Learning</h2>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="font-size: 14px; color: #444;">
                     {items}
-                </ul>
-            </td>
-        </tr>
-        '''
-    
-    # Deep Dive section
-    deep_dive_html = ""
-    if deep_dive:
-        deep_dive_html = f'''
-        <tr>
-            <td style="padding: 20px 30px; background-color: #667eea;">
-                <h2 style="color: #ffffff; margin: 0 0 10px 0; font-size: 18px;">🔍 Deep Dive</h2>
-                <h3 style="color: #ffffff; margin: 0 0 10px 0; font-size: 16px;">{deep_dive.get('topic', '')}</h3>
-                <p style="color: #e0e0ff; margin: 0; font-size: 14px; line-height: 1.5;">{deep_dive.get('reasoning', '')}</p>
+                </table>
             </td>
         </tr>
         '''
@@ -165,46 +161,57 @@ def format_newsletter_html(articles: List[Article], config: dict,
     <!--[if mso]>
     <style type="text/css">
         body, table, td {{font-family: Arial, Helvetica, sans-serif !important;}}
+        .article-title {{font-size: 16px !important;}}
     </style>
     <![endif]-->
+    <style>
+        @media only screen and (max-width: 600px) {{
+            .container {{ width: 100% !important; }}
+        }}
+    </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f4f4f4;">
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f4; -webkit-font-smoothing: antialiased;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
         <tr>
-            <td align="center" style="padding: 20px 0;">
-                <table role="presentation" width="650" cellspacing="0" cellpadding="0" border="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <td align="center" style="padding: 20px 10px;">
+                <table role="presentation" class="container" width="650" cellspacing="0" cellpadding="0" border="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
                     
                     <!-- Header -->
                     <tr>
-                        <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 35px 30px; text-align: center;">
-                            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: bold;">🤖 {newsletter_name}</h1>
-                            <p style="color: #e0e0e0; margin: 10px 0 0 0; font-size: 14px;">{tagline}</p>
+                        <td style="background-color: #1a1a2e; padding: 35px 30px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
+                                🤖 {newsletter_name}
+                            </h1>
+                            <p style="color: #a0a0a0; margin: 10px 0 0 0; font-size: 14px; font-weight: 400;">{tagline}</p>
                         </td>
                     </tr>
                     
-                    <!-- Date -->
+                    <!-- Intro -->
                     <tr>
-                        <td style="padding: 20px 30px 10px 30px; border-bottom: 1px solid #eeeeee;">
-                            <p style="color: #666666; margin: 0; font-size: 14px;">📅 Week of {week_of}</p>
+                        <td style="padding: 25px 30px; border-bottom: 1px solid #eee;">
+                            <p style="color: #444444; margin: 0; font-size: 15px; line-height: 1.6;">
+                                <strong>Hello,</strong>
+                            </p>
+                            <p style="color: #444444; margin: 10px 0 0 0; font-size: 15px; line-height: 1.6;">
+                                Here are this week's key AI developments you should know about.
+                            </p>
+                            <p style="color: #888888; margin: 10px 0 0 0; font-size: 13px;">
+                                📅 Week of {week_of}
+                            </p>
                         </td>
                     </tr>
                     
-                    <!-- Key Developments Header -->
+                    <!-- Section Header -->
                     <tr>
                         <td style="padding: 20px 30px 10px 30px;">
-                            <h2 style="color: #333333; margin: 0; font-size: 20px; font-weight: bold;">📰 Key Developments</h2>
+                            <h2 style="color: #1a1a2e; margin: 0; font-size: 18px; font-weight: 700;">
+                                📰 Key Developments
+                            </h2>
                         </td>
                     </tr>
                     
-                    <!-- Articles -->
+                    <!-- Articles by Category -->
                     {articles_html}
-                    
-                    <!-- Divider -->
-                    <tr>
-                        <td style="padding: 0 30px;">
-                            <hr style="border: none; border-top: 1px solid #eeeeee; margin: 20px 0;">
-                        </td>
-                    </tr>
                     
                     <!-- Tool of the Week -->
                     {tool_html}
@@ -212,14 +219,15 @@ def format_newsletter_html(articles: List[Article], config: dict,
                     <!-- Learning -->
                     {learning_html}
                     
-                    <!-- Deep Dive -->
-                    {deep_dive_html}
-                    
                     <!-- Footer -->
                     <tr>
-                        <td style="background-color: #f8f8f8; padding: 25px 30px; text-align: center; border-top: 1px solid #eeeeee;">
-                            <p style="color: #999999; margin: 0 0 5px 0; font-size: 12px;">Generated by AI Newsletter Bot</p>
-                            <p style="color: #bbbbbb; margin: 0; font-size: 11px;">{today.strftime("%Y-%m-%d %H:%M")}</p>
+                        <td style="background-color: #1a1a2e; padding: 25px 30px; text-align: center;">
+                            <p style="color: #888888; margin: 0 0 5px 0; font-size: 12px;">
+                                Curated with 🤖 by AI Newsletter Bot
+                            </p>
+                            <p style="color: #666666; margin: 0; font-size: 11px;">
+                                {today.strftime("%B %d, %Y")}
+                            </p>
                         </td>
                     </tr>
                     
@@ -234,12 +242,7 @@ def format_newsletter_html(articles: List[Article], config: dict,
 
 
 def save_newsletter(html: str, output_dir: Path, filename: str = None) -> Path:
-    """
-    Save newsletter HTML to file.
-    
-    Returns:
-        Path to saved file
-    """
+    """Save newsletter HTML to file."""
     output_dir.mkdir(parents=True, exist_ok=True)
     
     if not filename:
