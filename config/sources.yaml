@@ -13,25 +13,102 @@ newsletter:
 
 # Google Alerts RSS Feeds
 # -----------------------
-# Add your Google Alerts RSS feed URLs here
-# To get the RSS URL: Google Alerts > Click the pencil icon > "Deliver to: RSS feed"
+# Your AI-focused Google Alerts
 google_alerts:
-  - name: "AI Canada"
-    url: ""  # Paste your Google Alert RSS URL here
+  # Core AI Topics
+  - name: "Artificial general intelligence"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/6619274340374812968"
     priority: high
+    category: "capabilities"
     
-  - name: "Artificial Intelligence"
-    url: ""  # Paste your Google Alert RSS URL here
-    priority: medium
+  - name: "artificial superintelligence"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/5237285988387868375"
+    priority: high
+    category: "capabilities"
     
-  - name: "Machine Learning"
-    url: ""  # Paste your Google Alert RSS URL here
+  # Canadian Focus
+  - name: "Artificial intelligence canada"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/8343122122122789666"
+    priority: high
+    category: "governance"
+    
+  # Governance & Ethics
+  - name: "Artificial Intelligence Governance"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/2278791836030122678"
+    priority: high
+    category: "governance"
+    
+  - name: "Artificial intelligence ethics"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/2891758781116511337"
+    priority: high
+    category: "governance"
+    
+  - name: "Artificial intelligence regulation"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/7622957089141856354"
+    priority: high
+    category: "governance"
+    
+  - name: "Artificial intelligence privacy"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/16866512384761599386"
     priority: medium
+    category: "governance"
+    
+  - name: "Artificial intelligence security"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/15942459126004772098"
+    priority: medium
+    category: "governance"
+    
+  - name: "Artificial intelligence public sector"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/5306089899663451631"
+    priority: medium
+    category: "governance"
+    
+  # Business & Workforce
+  - name: "Artificial Intelligence Job Replacement"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/11653796448320099668"
+    priority: high
+    category: "business"
+    
+  # Agriculture & Industry (Your domain expertise)
+  - name: "artificial intelligence and agriculture"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/15755737833312608799"
+    priority: medium
+    category: "business"
+    
+  - name: "Artificial intelligence and crops"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/3281559451078185126"
+    priority: medium
+    category: "business"
+    
+  - name: "artificial intelligence and environment"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/14729553839422577938"
+    priority: medium
+    category: "business"
+    
+  - name: "Artificial Intelligence and grain"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/5761797510369087166"
+    priority: medium
+    category: "business"
+    
+  - name: "Artificial intelligence and oilseeds"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/12957642636281638741"
+    priority: low
+    category: "business"
+    
+  - name: "Artificial intelligence and the grain industry"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/9368672943932362999"
+    priority: medium
+    category: "business"
+    
+  - name: "artificial intelligence and wheat"
+    url: "https://www.google.com/alerts/feeds/03030665084568507357/12957642636281637464"
+    priority: low
+    category: "business"
 
-# Additional RSS Feeds (optional)
-# -------------------------------
+# Additional RSS Feeds (optional industry sources)
+# ------------------------------------------------
 rss_feeds:
-  # Canadian AI Sources
+  # Canadian AI Research
   - name: "Vector Institute"
     url: "https://vectorinstitute.ai/feed/"
     priority: high
@@ -73,6 +150,7 @@ topics:
       - responsible AI
       - Bill C-27
       - AIDA
+      - public sector
     priority_boost: 1.5
     
   capabilities:
@@ -85,6 +163,8 @@ topics:
       - Gemini
       - model release
       - state-of-the-art
+      - AGI
+      - superintelligence
     priority_boost: 1.3
     
   business:
@@ -96,6 +176,10 @@ topics:
       - funding
       - partnership
       - deployment
+      - job replacement
+      - workforce
+      - agriculture
+      - grain
     priority_boost: 1.0
     
   education:
@@ -106,7 +190,6 @@ topics:
       - research
       - academic
       - learning
-      - workforce
     priority_boost: 1.0
     
   tools:
@@ -147,7 +230,7 @@ canadian_boost: 2.0  # Multiplier for Canadian content
 exclude_patterns:
   - sponsored
   - advertisement
-  - [PR]
+  - "[PR]"
   - press release
 
 # Article age limit (days from today)
