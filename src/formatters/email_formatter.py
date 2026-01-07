@@ -88,9 +88,7 @@ def format_newsletter_html(articles: List[Article], config: dict,
             summary = article.ai_summary if article.ai_summary else article.summary
             commentary = article.ai_commentary if hasattr(article, 'ai_commentary') else ""
             
-            # Truncate summary if too long
-            if len(summary) > 300:
-                summary = summary[:297] + "..."
+            # Don't truncate - show full AI-generated summary
             
             articles_html += f'''
         <tr>

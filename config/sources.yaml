@@ -240,6 +240,6 @@ max_age_days: 7
 # -------------------
 gemini:
   model: "gemini-1.5-flash"
-  summary_style: "analytical"  # analytical, brief, detailed
+  summary_style: "detailed"  # analytical, brief, detailed
   include_commentary: true
-  max_summary_length: 150  # words
+  max_summary_length: 300  # words - detailed summaries like original newsletter

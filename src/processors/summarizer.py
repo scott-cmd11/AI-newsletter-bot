@@ -61,28 +61,38 @@ def summarize_article(article: Article, config: dict) -> Article:
     
     # Build prompt based on style
     style_instructions = {
-        'analytical': "Provide an analytical summary that explains WHY this matters and its implications.",
+        'analytical': "Explain WHY this matters and its broader implications for the industry.",
         'brief': "Provide a concise, factual summary of the key points.",
-        'detailed': "Provide a comprehensive summary covering all major aspects."
+        'detailed': "Provide a comprehensive, in-depth summary covering the full context, key findings, and implications."
     }
     
-    prompt = f"""You are writing for an AI newsletter called "AI This Week" focused on Canadian readers.
+    prompt = f"""You are a senior technology analyst writing for "AI This Week", a professional newsletter for Canadian AI professionals, executives, and policymakers.
 
 Article Title: {article.title}
 Source: {article.source}
-Original Summary: {article.summary}
+Category: {article.category or 'General'}
+Original Content: {article.summary}
 
-Instructions:
-1. Write a {max_length}-word summary of this article.
-2. {style_instructions.get(style, style_instructions['analytical'])}
-3. Focus on facts and implications for AI professionals and policymakers.
+Your task is to write a detailed, insightful summary for newsletter readers.
 
-{"4. After the summary, add a brief 'Commentary' section (1-2 sentences) with your analytical take on why this matters." if include_commentary else ""}
+REQUIREMENTS:
+1. Write approximately {max_length} words - be thorough and substantive
+2. {style_instructions.get(style, style_instructions['detailed'])}
+3. Include:
+   - The core news/development
+   - Key details, data points, or quotes if available
+   - Context: Why is this significant in the broader AI landscape?
+   - Implications: What does this mean for businesses, professionals, or policymakers?
+   - Canadian relevance if applicable
+4. Write in a professional, analytical tone - not hype or marketing speak
+5. Use clear, readable prose (not bullet points)
+
+{"ALSO: Add a 'Commentary' section (2-3 sentences) with your analytical perspective on why this development matters and what readers should watch for." if include_commentary else ""}
 
 Respond in JSON format:
 {{
-    "summary": "Your summary here...",
-    "commentary": "Your commentary here..." 
+    "summary": "Your detailed summary here (approximately {max_length} words)...",
+    "commentary": "Your analytical commentary here (2-3 sentences)..." 
 }}
 """
 
