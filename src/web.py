@@ -646,6 +646,27 @@ def health():
         "auth_password_length": len(AUTH_PASSWORD) if AUTH_PASSWORD else 0
     })
 
+@app.route('/debug/models')
+@requires_auth
+def debug_models():
+    """List available Gemini models."""
+    api_key = os.getenv('GEMINI_API_KEY')
+    if not api_key:
+        return "GEMINI_API_KEY not set"
+    
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    
+    models = []
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                models.append(m.name)
+        return jsonify({"models": models})
+    except Exception as e:
+        return f"Error listing models: {e}"
+
+
 
 def open_browser():
     webbrowser.open('http://127.0.0.1:5000')
