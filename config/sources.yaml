@@ -242,7 +242,7 @@ gemini:
   model: "gemini-1.5-flash"
   summary_style: "detailed"  # analytical, brief, detailed
   include_commentary: true
-  max_summary_length: 300  # words - detailed summaries like original newsletter
+  max_summary_length: 400  # words - detailed summaries like original newsletter
 
 # Style Personalization
 # ---------------------

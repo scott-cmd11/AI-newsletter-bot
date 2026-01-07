@@ -11,8 +11,9 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 from threading import Timer
+from functools import wraps
 
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response
 import yaml
 
 # Add src to path
@@ -26,6 +27,33 @@ from formatters.email_formatter import format_newsletter_html, save_newsletter
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+
+# Password protection - set AUTH_PASSWORD env var in Render
+AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')
+
+def check_auth(password):
+    """Check if the password is correct."""
+    return password == AUTH_PASSWORD
+
+def authenticate():
+    """Send 401 response to prompt for password."""
+    return Response(
+        'Password required to access this site.\n'
+        'Please enter the password.',
+        401,
+        {'WWW-Authenticate': 'Basic realm="AI Newsletter Bot"'}
+    )
+
+def requires_auth(f):
+    """Decorator to require password on routes (only if AUTH_PASSWORD is set)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if AUTH_PASSWORD:  # Only check if password is configured
+            auth = request.authorization
+            if not auth or not check_auth(auth.password):
+                return authenticate()
+        return f(*args, **kwargs)
+    return decorated
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -459,12 +487,14 @@ RESULT_TEMPLATE = '''
 
 
 @app.route('/')
+@requires_auth
 def index():
     data = load_review_data()
     return render_template_string(HTML_TEMPLATE, data=data)
 
 
 @app.route('/fetch')
+@requires_auth
 def fetch_articles():
     """Fetch and score new articles."""
     config = load_config()
@@ -509,6 +539,7 @@ def fetch_articles():
 
 
 @app.route('/save', methods=['POST'])
+@requires_auth
 def save_selection():
     """Save article selection."""
     data = load_review_data()
@@ -544,6 +575,7 @@ def save_selection():
 
 
 @app.route('/generate')
+@requires_auth
 def generate():
     """Generate newsletter from selected articles."""
     data = load_review_data()
@@ -595,6 +627,7 @@ def generate():
 
 
 @app.route('/preview')
+@requires_auth
 def preview():
     """Preview the generated newsletter."""
     output_file = OUTPUT_DIR / f"newsletter_{datetime.now().strftime('%Y-%m-%d')}.html"
