@@ -239,7 +239,7 @@ max_age_days: 7
 # Gemini API Settings
 # -------------------
 gemini:
-  model: "gemini-1.5-flash"
+  model: "gemini-1.5-flash-latest"
   summary_style: "detailed"  # analytical, brief, detailed
   include_commentary: true
   max_summary_length: 400  # words - detailed summaries like original newsletter
