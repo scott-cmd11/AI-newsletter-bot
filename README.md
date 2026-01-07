@@ -30,7 +30,15 @@ C:\Users\scott\.gemini\antigravity\scratch\AI-newsletter-bot
 
 3. **Select articles** → Click **Generate Newsletter** → Copy to Outlook
 
-### Option 2: Command Line
+### Option 2: Cloud Access (Any Device)
+
+🌐 **https://ai-newsletter-bot.onrender.com**
+
+Access from your phone, tablet, or any computer - no setup required!
+
+> **Note:** Free tier may take 30-60 seconds to wake up after inactivity.
+
+### Option 3: Command Line
 
 ```powershell
 cd C:\Users\scott\.gemini\antigravity\scratch\AI-newsletter-bot
