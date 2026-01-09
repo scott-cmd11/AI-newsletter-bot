@@ -1,0 +1,15 @@
+.git
+.github
+.gitignore
+README.md
+*.md
+tests/
+__pycache__/
+*.pyc
+.env
+.env.local
+.pytest_cache
+.vscode
+.DS_Store
+output/
+*.log
