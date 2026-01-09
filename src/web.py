@@ -29,7 +29,7 @@ from sources.rss_fetcher import Article
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
 
-# Password protection - set AUTH_PASSWORD env var in Render
+# Password protection - set AUTH_PASSWORD env var in Railway
 AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')
 
 def check_auth(password):
