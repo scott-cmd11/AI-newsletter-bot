@@ -58,16 +58,22 @@ def build_scott_voice_prompt(article: Article, section: str, config: dict, canad
         Formatted prompt string
     """
 
-    base_instructions = """You are writing for Scott's "AI This Week" newsletter - a professional resource for Canadian AI professionals, executives, and policymakers.
+    base_instructions = """You are writing for Scott's "AI This Week" newsletter - a premium professional resource for Canadian AI professionals, executives, and policymakers.
 
-VOICE & TONE:
-- Professional but accessible (not academic, not casual)
-- Analytical - explain WHY things matter, not just WHAT happened
-- Policy-aware - governance, regulation, societal impact
-- Balanced - acknowledge both opportunities AND concerns
-- Business-focused - economic implications matter
-- Use hedging: "could", "may", "highlights", "risks"
-- Connect dots between stories
+VOICE & TONE (Non-Negotiable):
+- Professional but accessible: Not academic, not casual.
+- Analytical: Always answer "So what?". Explain WHY things matter, not just WHAT happened.
+- Policy-aware: Focus on governance, regulation, and societal impact.
+- Balanced: Acknowledge both opportunities AND concerns (40% concerns, 35% opportunities, 25% neutral analysis).
+- Business-focused: Emphasize economic and workforce transitions.
+- Nuanced: Use hedging ("could", "may", "highlights", "risks"). Avoid sensationalism.
+- Specific: Use data, numbers, and concrete studies where available.
+- Connected: Show relationships between stories and broader trends.
+
+WRITING RULES:
+1. 2-3 sentences per paragraph maximum.
+2. Use bullet points for lists to improve scannability.
+3. Every summary MUST connect to the Canadian context.
 
 CANADIAN FOCUS:""" + (f"\n{canadian_context}" if canadian_context else "")
 
@@ -77,57 +83,54 @@ CANADIAN FOCUS:""" + (f"\n{canadian_context}" if canadian_context else "")
 Write 2-3 PARAGRAPHS covering:
 
 PARAGRAPH 1 (Who/What):
-- Who conducted the research/made the announcement?
+- Who conducted the research/made the announcement? 
 - What did they find/announce? Include specific numbers, percentages, data.
-- Keep to 2-3 sentences.
+- 2-3 sentences.
 
 PARAGRAPH 2 (Context & Implications):
-- What does this mean? Why is it significant?
+- "So what?" - What does this mean? Why is it significant?
 - How does this fit into the broader AI landscape?
-- What are both the opportunities AND concerns?
-- Keep to 2-3 sentences.
+- Use a balanced perspective (opportunities vs concerns).
+- 2-3 sentences.
 
 PARAGRAPH 3 (Canadian Angle - REQUIRED):
 - How does this affect Canada specifically?
-- Implications for Canadian professionals/policymakers?
-- Implications for Canadian policy/business?
+- Implications for Canadian professionals, policy, or business.
 - 1-2 sentences.
 
-CRITICAL: The summary MUST be 2-3 paragraphs with clear paragraph breaks, NOT a single block of text. Each paragraph should be on a new line.""",
+CRITICAL: The summary MUST be 2-3 paragraphs with clear paragraph breaks (\\n\\n). Each paragraph should start with a specific focus as defined above.""",
 
         'bright_spot': """
-Write 2 PARAGRAPHS highlighting the positive development:
+Write 2 PARAGRAPHS highlighting a positive breakthrough or innovation:
 
-PARAGRAPH 1: What happened and why it's good news (2-3 sentences)
-PARAGRAPH 2: Why this matters for progress/innovation (1-2 sentences)
+PARAGRAPH 1: What happened and why it's impactful. Avoid hype; be analytical. (2-3 sentences)
+PARAGRAPH 2: The broader benefit for society or innovation, with a focus on Canadian relevance if possible. (1-2 sentences)
 
-Tone: Optimistic but grounded, not hype or exaggeration.""",
+Tone: Optimistic but grounded and nuanced.""",
 
         'deep_dive': """
-Write 3-4 PARAGRAPHS for deeper analysis:
+Write 3-4 PARAGRAPHS for a longer research or policy analysis:
 
-PARAGRAPH 1: Research question and methodology (2-3 sentences)
-PARAGRAPH 2: Key findings with specific data (2-3 sentences)
-PARAGRAPH 3: Broader implications for the field (2-3 sentences)
-PARAGRAPH 4: Canadian relevance and what to watch (1-2 sentences)
+PARAGRAPH 1: Research question, methodology, or the core policy proposal. (2-3 sentences)
+PARAGRAPH 2: Key findings with specific data points and numbers. (2-3 sentences)
+PARAGRAPH 3: Broader implications for governance, ethics, or society. (2-3 sentences)
+PARAGRAPH 4: Detailed Canadian relevance and "what to watch" in the coming months. (2-3 sentences)
 
 Each paragraph on its own line for clarity.""",
 
         'tool': """
-Write 2 PARAGRAPHS:
+Write 2 PARAGRAPHS focused on practical utility:
 
-PARAGRAPH 1: What the tool does, who it's for, why it matters (2-3 sentences)
-PARAGRAPH 2: Potential use cases, practical utility, Canadian relevance (1-2 sentences)
+PARAGRAPH 1: What the tool does, who it's for, and the specific problem it solves. (2-3 sentences)
+PARAGRAPH 2: Potential use cases for Canadian professionals and practical utility. (1-2 sentences)
 
-Focus on practical utility, not marketing hype.""",
+Focus on real utility, not marketing announcements.""",
 
         'grain_quality': """
-Write 2 PARAGRAPHS on agriculture/farming AI application:
+Write 2 PARAGRAPHS on application in agriculture/grain:
 
-PARAGRAPH 1: What was developed, how it applies to grain/farming (2-3 sentences)
-PARAGRAPH 2: Impact on Canadian agriculture, practical benefits (1-2 sentences)
-
-Focus on real agricultural applications."""
+PARAGRAPH 1: The specific AI application to grain quality or farming. (2-3 sentences)
+PARAGRAPH 2: Impact on Canadian agriculture and practical benefits for producers. (1-2 sentences)"""
     }
 
     section_prompt = section_formats.get(section, section_formats['headline'])

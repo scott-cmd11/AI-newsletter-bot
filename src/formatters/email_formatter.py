@@ -528,6 +528,26 @@ def format_newsletter_html_sections(selected_articles: dict, config: dict) -> st
     deep_dive_html = build_deep_dive_section(selected_articles.get('deep_dives', []))
     grain_html = build_grain_quality_section(selected_articles.get('grain_quality', []))
 
+    # Build Theme of the Week section
+    theme_of_week = selected_articles.get('theme_of_week')
+    theme_html = ""
+    if theme_of_week and theme_of_week.get('enabled') and theme_of_week.get('content'):
+        theme_html = f'''
+        <tr>
+            <td style="padding: 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px 30px;">
+                            <h2 style="color: #ffffff; margin: 0 0 5px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.8;">💡 Theme of the Week</h2>
+                            <h3 style="color: #ffffff; margin: 0 0 15px 0; font-size: 20px; font-weight: 600; line-height: 1.3;">{theme_of_week.get('title', '')}</h3>
+                            <p style="color: #e8e8ff; margin: 0; font-size: 15px; line-height: 1.7; font-style: italic;">{theme_of_week.get('content', '')}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        '''
+
     # Complete HTML
     html = f'''<!DOCTYPE html>
 <html>
@@ -586,6 +606,9 @@ def format_newsletter_html_sections(selected_articles: dict, config: dict) -> st
 
                     <!-- Tool of the Week -->
                     {tool_html}
+
+                    <!-- Theme of the Week -->
+                    {theme_html}
 
                     <!-- Learning -->
                     {learning_html}

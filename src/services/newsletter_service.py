@@ -180,6 +180,70 @@ class NewsletterService:
             logger.error(f"Error reading newsletter file: {e}")
             return None
 
+    def enrich_selected_articles(self, articles: List[Article]) -> Dict[str, List[Article]]:
+        """
+        Enrich articles that have already been manually selected by the user.
+        Organizes them into sections and generates voice-aligned summaries.
+
+        Args:
+            articles: List of manually selected Article objects
+
+        Returns:
+            Dict with sections as keys and enriched articles as values
+        """
+        if not articles:
+            return {
+                'headlines': [],
+                'bright_spots': [],
+                'tools': [],
+                'deep_dives': [],
+                'grain_quality': []
+            }
+
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            logger.warning("GEMINI_API_KEY not set - cannot generate AI summaries")
+            # Just group by section without enrichment
+            return classify_all_articles(articles, self.config, use_sentiment_api=False)
+
+        try:
+            logger.info(f"Enriching {len(articles)} manually selected articles")
+
+            # Step 1: Classify articles to determine section-specific prompts
+            classified = classify_all_articles(articles, self.config, use_sentiment_api=True)
+            
+            # Step 2: Generate AI summaries with section-specific prompts
+            gemini_config = self.config.get('gemini', {})
+            
+            # Use plural keys consistent with email_formatter
+            selection_results = {
+                'headlines': classified.get('headline', []),
+                'bright_spots': classified.get('bright_spot', []),
+                'tools': classified.get('tool', []),
+                'deep_dives': classified.get('deep_dive', []),
+                'grain_quality': classified.get('grain_quality', [])
+            }
+
+            for section_key, section_articles in selection_results.items():
+                if not section_articles:
+                    continue
+
+                # Map plural key back to singular for summarize_article prompt logic
+                prompt_section = section_key.rstrip('s')
+                if prompt_section == 'headlin': prompt_section = 'headline'
+                
+                logger.info(f"   Summarizing {len(section_articles)} articles for section '{section_key}'")
+
+                for article in section_articles:
+                    # Generate summary with section-specific prompt
+                    summarize_article(article, gemini_config, section=prompt_section)
+
+            return selection_results
+
+        except Exception as e:
+            logger.error(f"Error in enrich_selected_articles: {e}", exc_info=True)
+            return classify_all_articles(articles, self.config, use_sentiment_api=False)
+
     def enrich_articles_with_sections(self, articles: List[Article]) -> Dict[str, List[Article]]:
         """
         Enrich articles and organize into Scott's format sections.

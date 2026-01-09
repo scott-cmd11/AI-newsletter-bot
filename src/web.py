@@ -647,11 +647,18 @@ def generate():
             logger.error("Failed to reconstruct articles")
             return redirect(url_for('index'))
 
-        # Enrich with AI summaries and theme
-        articles, theme_of_week = newsletter_service.enrich_articles_with_ai(articles)
-
-        # Generate HTML
-        html = newsletter_service.generate_newsletter_html(articles, theme_of_week)
+        # Step 1: Enrich articles with section-specific AI summaries
+        selected_sections = newsletter_service.enrich_selected_articles(articles)
+        
+        # Step 2: Generate "Theme of the Week" for better synthesis
+        from processors.summarizer import generate_theme_of_week
+        theme_of_week = generate_theme_of_week(articles, newsletter_service.config)
+        
+        # Step 3: Generate HTML using the section-based layout
+        # (Inject theme_of_week if successfully generated)
+        selected_sections['theme_of_week'] = theme_of_week if theme_of_week and theme_of_week.get('enabled') else None
+        
+        html = newsletter_service.generate_newsletter_html_sections(selected_sections)
 
         # Save newsletter
         output_file = newsletter_service.save_newsletter(html)
