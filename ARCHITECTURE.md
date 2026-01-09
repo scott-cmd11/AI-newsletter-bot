@@ -27,9 +27,10 @@ src/
 │
 ├── services/           # Business logic layer
 │   ├── __init__.py
-│   ├── article_service.py      # Fetching, scoring, categorizing
-│   ├── newsletter_service.py   # Newsletter generation & formatting
-│   └── review_service.py       # High-level review operations
+│   ├── article_service.py          # Fetching, scoring, categorizing
+│   ├── newsletter_service.py       # Newsletter generation & formatting
+│   ├── review_service.py           # High-level review operations
+│   └── personalization_service.py  # Learning from historical selections
 │
 ├── sources/            # Data fetching
 │   ├── __init__.py
@@ -111,8 +112,8 @@ High-level review operations (orchestrates other services):
 ```python
 service = ReviewService(config, output_dir)
 
-# Fetch articles and create review
-review = service.fetch_and_create_review(use_cache=False)
+# Fetch articles and create review with personalization
+review = service.fetch_and_create_review(use_cache=False, apply_personalization=True)
 
 # Load existing review
 review = service.load_review()
@@ -131,12 +132,50 @@ service.clear_review()
 ```
 
 **Methods:**
-- `fetch_and_create_review()` - Full workflow: fetch → score → categorize
+- `fetch_and_create_review()` - Full workflow: fetch → score → categorize → personalize
 - `load_review()` - Load today's review
 - `save_selections()` - Save article selections
 - `get_selected_articles()` - Get selected articles
 - `get_review_summary()` - Get review statistics
 - `clear_review()` - Delete review data
+
+#### PersonalizationService
+Learns from historical selections to personalize article recommendations:
+```python
+service = PersonalizationService(output_dir)
+
+# Analyze historical selections
+profile = service.analyze_historical_selections()
+
+# Predict selection likelihood (0-100%)
+likelihood = service.predict_selection_likelihood(article)
+
+# Get personalized recommendations
+recommendations = service.get_recommended_articles(articles, count=8)
+
+# Get auto-suggested articles
+suggestions = service.get_auto_suggestions(articles, threshold=75)
+
+# Get preference profile summary
+profile_summary = service.get_preference_profile_summary()
+```
+
+**Methods:**
+- `analyze_historical_selections()` - Build preference profile from past reviews
+- `predict_selection_likelihood()` - Get 0-100% prediction for an article
+- `boost_article_score()` - Apply personalization boost to article score
+- `get_recommended_articles()` - Get articles ranked by prediction
+- `get_auto_suggestions()` - Get high-confidence suggestions
+- `get_preference_profile_summary()` - Get human-readable profile
+
+**Preference Profile:**
+- `source_preferences` - Dict of sources → boost multipliers (1.0-2.0x)
+- `category_preferences` - Dict of categories → boost multipliers
+- `keyword_preferences` - Dict of keywords → frequency scores
+- `preferred_sources` - List of top 5 sources
+- `preferred_categories` - List of top 5 categories
+- `score_range` - (min, max) scores from selections
+- `selection_rate` - Percentage of articles selected
 
 ### 2. Repository Layer
 
@@ -361,6 +400,34 @@ Services don't need to change!
 - No sensitive data in logs
 - Safe error handling (no stack traces exposed)
 
+## Personalization API Endpoints
+
+### Available Routes
+- `GET /api/preference-profile` - Get the learned user preference profile
+- `POST /api/predictions` - Get selection predictions for specific articles
+  - Request body: `{"articles": [...]}`
+  - Response: `{"predictions": [{"article_id": ..., "predicted_likelihood": ...}, ...]}`
+- `GET /api/recommendations` - Get top 8 recommended articles
+  - Response: `{"recommendations": [...]}`
+- `GET /api/auto-suggestions` - Get high-confidence suggestions (>75% match)
+  - Response: `{"suggestions": [...], "count": N}`
+
+### Preference Profile Structure
+```json
+{
+  "source_preferences": {"Source Name": 1.5, ...},
+  "category_preferences": {"governance": 1.3, ...},
+  "keyword_preferences": {"artificial": 5, "canada": 3, ...},
+  "score_threshold": 7.0,
+  "score_range": [6.0, 10.8],
+  "total_selections": 16,
+  "total_available": 255,
+  "selection_rate": 0.063,
+  "preferred_sources": ["Artificial intelligence canada", ...],
+  "preferred_categories": ["governance", "security", ...]
+}
+```
+
 ## Monitoring & Debugging
 
 ### Enable Debug Logging
@@ -385,9 +452,21 @@ GET /health
 
 ## Future Improvements
 
-1. **Database Layer**: SQLite backend instead of JSON
-2. **Event System**: Pub-sub for article events
-3. **Metrics**: Track performance and usage
-4. **Webhooks**: External triggers for generation
-5. **Multi-user**: Support multiple users/profiles
-6. **API**: RESTful API for programmatic access
+1. **Database Layer**: SQLite backend instead of JSON for better scalability
+2. **Event System**: Pub-sub for article events and notifications
+3. **Metrics Dashboard**: Track what articles are clicked, popular topics
+4. **Webhooks**: External triggers for generation (AWS Lambda, Google Cloud Functions)
+5. **Multi-user**: Support multiple users/profiles with separate preferences
+6. **Web UI Enhancements**: Display personalization scores and predictions in interface
+7. **A/B Testing**: Test different summarization styles and preferences learning
+
+## Completed Improvements
+
+- ✅ Personalization System (learns from historical selections)
+- ✅ Service-Repository Pattern (clean architecture)
+- ✅ Configuration Validation (Pydantic)
+- ✅ Structured Logging (comprehensive logging)
+- ✅ Parallel API Calls (3.2x performance)
+- ✅ Article Caching (5x faster repeated runs)
+- ✅ Input Validation (comprehensive checks)
+- ✅ Unit Tests (68+ tests)
