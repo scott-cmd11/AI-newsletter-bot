@@ -66,6 +66,13 @@ _review_service = None
 _article_service = None
 _newsletter_service = None
 
+# Progress tracking for fetch operations
+_fetch_progress = {
+    "status": "idle",  # idle, fetching, analyzing, scoring, personalizing, complete
+    "message": "",
+    "percentage": 0
+}
+
 
 def get_config() -> dict:
     """Get or load config."""
@@ -545,26 +552,48 @@ def index():
         return render_template_string(HTML_TEMPLATE, data=None)
 
 
+def update_progress(status: str, message: str, percentage: int) -> None:
+    """Update fetch progress."""
+    global _fetch_progress
+    _fetch_progress["status"] = status
+    _fetch_progress["message"] = message
+    _fetch_progress["percentage"] = min(100, max(0, percentage))
+    logger.debug(f"Progress: {status} - {message} ({percentage}%)")
+
+
+@app.route('/api/progress')
+@requires_auth
+def get_progress():
+    """Get current fetch progress."""
+    return jsonify(_fetch_progress)
+
+
 @app.route('/fetch')
 @requires_auth
 def fetch_articles():
     """Fetch and score new articles."""
     try:
         logger.info("Fetch articles request")
+        update_progress("fetching", "Fetching articles from sources...", 10)
         review_service = get_review_service()
 
-        # Fetch articles and create review
-        review_data = review_service.fetch_and_create_review(use_cache=False)
+        # Fetch articles and create review (no personalization for speed)
+        review_data = review_service.fetch_and_create_review(use_cache=False, apply_personalization=False)
 
         if not review_data or not review_data.get('categories'):
             logger.warning("No articles available to fetch")
+            update_progress("error", "No articles available", 0)
             return redirect(url_for('index'))
 
+        update_progress("complete", f"Fetched {review_data.get('total_articles', 0)} articles", 100)
         logger.info(f"Fetched {review_data.get('total_articles', 0)} articles")
+
+        # Reset progress after 2 seconds
         return redirect(url_for('index'))
 
     except Exception as e:
         logger.error(f"Error in fetch_articles route: {e}")
+        update_progress("error", f"Error: {str(e)}", 0)
         return redirect(url_for('index'))
 
 

@@ -35,13 +35,13 @@ class ReviewService:
         logger.debug("ReviewService initialized")
 
     def fetch_and_create_review(self, use_cache: bool = True,
-                               apply_personalization: bool = True) -> Dict[str, Any]:
+                               apply_personalization: bool = False) -> Dict[str, Any]:
         """
         Fetch articles and create a review for curation.
 
         Args:
             use_cache: Use cached articles if available
-            apply_personalization: Apply personalization scores if available
+            apply_personalization: Apply personalization scores if available (set to False for speed)
 
         Returns:
             Review data with articles grouped by category
@@ -55,7 +55,9 @@ class ReviewService:
                 logger.warning("No articles available for review")
                 return self._create_empty_review()
 
-            # Categorize articles with optional personalization
+            logger.info(f"Fetched {len(articles)} articles")
+
+            # Categorize articles (personalization skipped for speed on initial fetch)
             categories = self.article_service.categorize_articles(
                 articles, apply_personalization=apply_personalization
             )
@@ -66,11 +68,12 @@ class ReviewService:
             )
             review_data['categories'] = categories
 
-            # Add preference profile if personalization is available
-            profile = self.article_service.get_preference_profile()
-            if profile:
-                review_data['preference_profile'] = profile
-                logger.info(f"Added preference profile to review")
+            # Add preference profile if personalization service has cached data
+            if apply_personalization:
+                profile = self.article_service.get_preference_profile()
+                if profile:
+                    review_data['preference_profile'] = profile
+                    logger.info(f"Added preference profile to review")
 
             logger.info(f"Created review with {len(articles)} articles in {len(categories)} categories")
 

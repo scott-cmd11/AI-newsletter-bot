@@ -64,7 +64,20 @@ class PersonalizationService:
         """
         self.output_dir = Path(output_dir)
         self.preference_profile = PreferenceProfile()
+        self._analysis_cached = False
+        self._cache_time = None
         logger.debug("PersonalizationService initialized")
+
+    def is_profile_cached(self) -> bool:
+        """Check if preference profile has been analyzed."""
+        return self._analysis_cached
+
+    def clear_cache(self) -> None:
+        """Clear cached preference profile."""
+        self._analysis_cached = False
+        self._cache_time = None
+        self.preference_profile = PreferenceProfile()
+        logger.debug("Personalization cache cleared")
 
     def analyze_historical_selections(self) -> PreferenceProfile:
         """
@@ -167,6 +180,11 @@ class PersonalizationService:
 
             # Store top keywords
             self.preference_profile.keyword_preferences = dict(all_keywords.most_common(20))
+
+            # Mark as cached
+            self._analysis_cached = True
+            from datetime import datetime as dt
+            self._cache_time = dt.now()
 
             logger.info(
                 f"Analyzed {len(review_files)} reviews: "

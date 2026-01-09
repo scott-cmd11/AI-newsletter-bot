@@ -53,6 +53,59 @@
             font-size: 0.9rem;
             color: #888;
         }
+        .progress-container {
+            display: none;
+            background: #1e1e30;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+        .progress-container.show {
+            display: block;
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+        .progress-status {
+            color: #667eea;
+            font-weight: 500;
+        }
+        .progress-percentage {
+            color: #888;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .progress-message {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
         .actions {
             display: flex;
             justify-content: center;
@@ -222,6 +275,18 @@
             <p>Select articles to include in your newsletter</p>
         </header>
 
+        <!-- Progress Bar -->
+        <div id="progress-container" class="progress-container">
+            <div class="progress-label">
+                <span class="progress-status" id="progress-status">Fetching...</span>
+                <span class="progress-percentage" id="progress-percentage">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-message" id="progress-message"></div>
+        </div>
+
         {% if not data %}
         <div class="empty-state">
             <h3>No articles loaded</h3>
@@ -344,6 +409,57 @@
 
         // Initialize count
         updateCount();
+
+        // Progress tracking
+        let progressInterval = null;
+
+        function showProgress() {
+            const container = document.getElementById('progress-container');
+            container.classList.add('show');
+        }
+
+        function hideProgress() {
+            const container = document.getElementById('progress-container');
+            setTimeout(() => {
+                container.classList.remove('show');
+            }, 1500);
+        }
+
+        function updateProgressBar() {
+            fetch('{{ url_for("get_progress") }}')
+                .then(response => response.json())
+                .then(data => {
+                    const fill = document.getElementById('progress-fill');
+                    const status = document.getElementById('progress-status');
+                    const percentage = document.getElementById('progress-percentage');
+                    const message = document.getElementById('progress-message');
+
+                    fill.style.width = data.percentage + '%';
+                    status.textContent = data.status === 'fetching' ? '🔄 Fetching articles...' :
+                                        data.status === 'complete' ? '✅ Complete' :
+                                        data.status === 'error' ? '❌ Error' : data.status;
+                    percentage.textContent = data.percentage + '%';
+                    message.textContent = data.message;
+
+                    if (data.status === 'complete' || data.status === 'error') {
+                        clearInterval(progressInterval);
+                        hideProgress();
+                    }
+                })
+                .catch(err => console.error('Progress update error:', err));
+        }
+
+        // Override fetch link to show progress
+        document.querySelectorAll('a[href*="/fetch"]').forEach(link => {
+            link.addEventListener('click', function(e) {
+                // Show progress immediately
+                showProgress();
+                // Start polling every 300ms
+                progressInterval = setInterval(updateProgressBar, 300);
+                // Make first update immediately
+                updateProgressBar();
+            });
+        });
     </script>
 </body>
 </html>
