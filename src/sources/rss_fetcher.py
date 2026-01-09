@@ -39,6 +39,11 @@ class Article:
     ai_summary: str = ""
     ai_commentary: str = ""
 
+    # New fields for section-based newsletter
+    section: str = ""  # headline, bright_spot, tool, deep_dive, grain_quality
+    sentiment: str = ""  # positive, negative, neutral, mixed
+    canadian_context: str = ""  # Generated Canadian angle
+
     def __post_init__(self):
         """Validate article data."""
         # Ensure title is not empty
@@ -80,7 +85,10 @@ class Article:
             "priority": self.priority,
             "score": self.score,
             "ai_summary": self.ai_summary,
-            "ai_commentary": self.ai_commentary
+            "ai_commentary": self.ai_commentary,
+            "section": self.section,
+            "sentiment": self.sentiment,
+            "canadian_context": self.canadian_context
         }
 
 

@@ -44,118 +44,245 @@ def init_gemini(api_key: str = None) -> bool:
     return True
 
 
-def summarize_article(article: Article, config: dict) -> Article:
+def build_scott_voice_prompt(article: Article, section: str, config: dict, canadian_context: str = "") -> str:
     """
-    Generate AI summary and commentary for a single article.
-    
+    Build a section-specific prompt in Scott's voice.
+
     Args:
         article: Article to summarize
-        config: Gemini configuration
-        
-    Returns:
-        Article with ai_summary and ai_commentary populated
-    """
-    if not GEMINI_AVAILABLE:
-        article.ai_summary = article.summary[:200] + "..."
-        article.ai_commentary = ""
-        return article
-        
-    model_name = config.get('model', 'gemini-1.5-flash')
-    style = config.get('summary_style', 'analytical')
-    include_commentary = config.get('include_commentary', True)
-    max_length = config.get('max_summary_length', 150)
-    
-    # Build prompt based on style
-    style_instructions = {
-        'analytical': "Explain WHY this matters and its broader implications for the industry.",
-        'brief': "Provide a concise, factual summary of the key points.",
-        'detailed': "Provide a comprehensive, in-depth summary covering the full context, key findings, and implications."
-    }
-    
-    prompt = f"""You are a senior technology analyst writing for "AI This Week", a professional newsletter for Canadian AI professionals, executives, and policymakers.
+        section: Newsletter section (headline, bright_spot, tool, deep_dive, grain_quality)
+        config: Configuration dict
+        canadian_context: Pre-generated Canadian angle (optional)
 
-YOUR WRITING STYLE:
-- Voice: Professional technology analyst with expertise in AI governance
-- Tone: Analytical and insightful, avoiding hype and marketing speak
-- Focus on WHY developments matter, not just WHAT happened
-- Include Canadian context and relevance when applicable
-- Highlight implications for policy and business decisions
+    Returns:
+        Formatted prompt string
+    """
+
+    base_instructions = """You are writing for Scott's "AI This Week" newsletter - a professional resource for Canadian AI professionals, executives, and policymakers.
+
+VOICE & TONE:
+- Professional but accessible (not academic, not casual)
+- Analytical - explain WHY things matter, not just WHAT happened
+- Policy-aware - governance, regulation, societal impact
+- Balanced - acknowledge both opportunities AND concerns
+- Business-focused - economic implications matter
+- Use hedging: "could", "may", "highlights", "risks"
+- Connect dots between stories
+
+CANADIAN FOCUS:""" + (f"\n{canadian_context}" if canadian_context else "")
+
+    # Section-specific formatting
+    section_formats = {
+        'headline': """
+Write 2-3 PARAGRAPHS covering:
+
+PARAGRAPH 1 (Who/What):
+- Who conducted the research/made the announcement?
+- What did they find/announce? Include specific numbers, percentages, data.
+- Keep to 2-3 sentences.
+
+PARAGRAPH 2 (Context & Implications):
+- What does this mean? Why is it significant?
+- How does this fit into the broader AI landscape?
+- What are both the opportunities AND concerns?
+- Keep to 2-3 sentences.
+
+PARAGRAPH 3 (Canadian Angle - REQUIRED):
+- How does this affect Canada specifically?
+- Implications for Canadian professionals/policymakers?
+- Implications for Canadian policy/business?
+- 1-2 sentences.
+
+CRITICAL: The summary MUST be 2-3 paragraphs with clear paragraph breaks, NOT a single block of text. Each paragraph should be on a new line.""",
+
+        'bright_spot': """
+Write 2 PARAGRAPHS highlighting the positive development:
+
+PARAGRAPH 1: What happened and why it's good news (2-3 sentences)
+PARAGRAPH 2: Why this matters for progress/innovation (1-2 sentences)
+
+Tone: Optimistic but grounded, not hype or exaggeration.""",
+
+        'deep_dive': """
+Write 3-4 PARAGRAPHS for deeper analysis:
+
+PARAGRAPH 1: Research question and methodology (2-3 sentences)
+PARAGRAPH 2: Key findings with specific data (2-3 sentences)
+PARAGRAPH 3: Broader implications for the field (2-3 sentences)
+PARAGRAPH 4: Canadian relevance and what to watch (1-2 sentences)
+
+Each paragraph on its own line for clarity.""",
+
+        'tool': """
+Write 2 PARAGRAPHS:
+
+PARAGRAPH 1: What the tool does, who it's for, why it matters (2-3 sentences)
+PARAGRAPH 2: Potential use cases, practical utility, Canadian relevance (1-2 sentences)
+
+Focus on practical utility, not marketing hype.""",
+
+        'grain_quality': """
+Write 2 PARAGRAPHS on agriculture/farming AI application:
+
+PARAGRAPH 1: What was developed, how it applies to grain/farming (2-3 sentences)
+PARAGRAPH 2: Impact on Canadian agriculture, practical benefits (1-2 sentences)
+
+Focus on real agricultural applications."""
+    }
+
+    section_prompt = section_formats.get(section, section_formats['headline'])
+
+    prompt = f"""{base_instructions}
 
 Article Title: {article.title}
 Source: {article.source}
 Category: {article.category or 'General'}
-Original Content: {article.summary}
+Content: {article.summary}
 
-Your task is to write a concise, insightful summary for newsletter readers.
+{section_prompt}
 
-REQUIREMENTS:
-1. Write EXACTLY 3-4 sentences - be concise and substantive
-2. {style_instructions.get(style, style_instructions['detailed'])}
-3. Include:
-   - The core news/development
-   - Key details, data points, or quotes if available
-   - Context: Why is this significant in the broader AI landscape?
-   - Implications: What does this mean for businesses, professionals, or policymakers?
-   - Canadian relevance if applicable
-4. Write in a professional, analytical tone - not hype or marketing speak
-5. Use clear, readable prose (not bullet points)
-6. Estimate reading time based on word count (assume 200 words per minute)
-
-{"ALSO: Add a 'Commentary' section (2-3 sentences) with your analytical perspective on why this development matters and what readers should watch for." if include_commentary else ""}
-
-Respond in JSON format:
+Respond in JSON format (parse the JSON, handle markdown code blocks):
 {{
-    "summary": "Your concise summary here (exactly 3-4 sentences)...",
-    "commentary": "Your analytical commentary here (2-3 sentences)...",
-    "read_time": "X min read"
-}}
-"""
+    "summary": "Your multi-paragraph summary here. Use actual line breaks (\\n\\n) between paragraphs...",
+    "canadian_context": "Specific Canadian angle or implication (1-2 sentences, optional)",
+    "sentiment": "positive|negative|neutral|mixed"
+}}"""
+
+    return prompt
+
+
+def generate_canadian_context(article: Article, config: dict) -> str:
+    """
+    Generate Canadian angle for articles that don't naturally have one.
+
+    Returns: Canadian context string or empty string if not applicable
+    """
+    if not GEMINI_AVAILABLE:
+        return ""
+
+    api_key = os.getenv('GEMINI_API_KEY')
+    if not api_key:
+        return ""
+
+    # Check if article already mentions Canada
+    text = (article.title + " " + article.summary).lower()
+    if any(keyword in text for keyword in ['canada', 'canadian', 'toronto', 'ottawa', 'montreal']):
+        return ""  # Already has Canadian content
 
     try:
+        genai.configure(api_key=api_key)
+        model_name = config.get('gemini', {}).get('model', 'gemini-1.5-flash')
+
+        prompt = f"""Generate a brief 1-2 sentence Canadian angle for this AI article.
+
+Title: {article.title}
+Summary: {article.summary[:300]}
+
+Generate a sentence explaining how this relates to or impacts Canada, Canadian professionals, or Canadian policy.
+Do NOT start with "For Canada," just provide the insight naturally.
+
+Respond with ONLY the Canadian angle text (no JSON, no markdown, just plain text)."""
+
         model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
-        
+
+        canadian_angle = response.text.strip()
+        if canadian_angle and len(canadian_angle) > 10:
+            logger.debug(f"Generated Canadian context for '{article.title[:40]}'")
+            return canadian_angle
+
+    except Exception as e:
+        logger.debug(f"Could not generate Canadian context: {e}")
+
+    return ""
+
+
+def summarize_article(article: Article, config: dict, section: str = "headline") -> Article:
+    """
+    Generate AI summary and commentary for a single article using Scott's voice.
+
+    Args:
+        article: Article to summarize
+        config: Gemini configuration
+        section: Newsletter section for section-specific prompts
+
+    Returns:
+        Article with ai_summary, sentiment, and canadian_context populated
+    """
+    if not GEMINI_AVAILABLE:
+        article.ai_summary = article.summary[:200] + "..."
+        article.ai_commentary = ""
+        article.sentiment = "neutral"
+        return article
+
+    api_key = os.getenv('GEMINI_API_KEY')
+    if not api_key:
+        logger.warning("GEMINI_API_KEY not set")
+        article.ai_summary = article.summary[:200] + "..."
+        article.sentiment = "neutral"
+        return article
+
+    model_name = config.get('model', 'gemini-1.5-flash')
+
+    # Generate Canadian context if needed
+    canadian_context = generate_canadian_context(article, config)
+
+    # Build Scott's voice prompt
+    prompt = build_scott_voice_prompt(article, section, config, canadian_context)
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(prompt)
+
         # Parse JSON response
         response_text = response.text.strip()
-        
+
         # Handle markdown code blocks
         if response_text.startswith('```'):
             response_text = response_text.split('```')[1]
             if response_text.startswith('json'):
                 response_text = response_text[4:]
-        
+
         result = json.loads(response_text)
-        
+
         article.ai_summary = result.get('summary', article.summary)
         article.ai_commentary = result.get('commentary', '')
-        
+        article.sentiment = result.get('sentiment', 'neutral')
+        article.canadian_context = canadian_context
+
+        logger.debug(f"Summarized '{article.title[:50]}' for section '{section}' (sentiment: {article.sentiment})")
+
     except json.JSONDecodeError as e:
         # If JSON parsing fails, use the raw response
         logger.warning(f"JSON parsing failed for article '{article.title[:50]}': {e}")
         article.ai_summary = response.text[:500] if response else article.summary
         article.ai_commentary = ""
+        article.sentiment = "neutral"
     except Exception as e:
         logger.error(f"Summarization error for article '{article.title[:50]}': {e}")
         article.ai_summary = article.summary[:300]
         article.ai_commentary = ""
+        article.sentiment = "neutral"
 
     return article
 
 
-async def summarize_article_async(article: Article, config: dict) -> Article:
+async def summarize_article_async(article: Article, config: dict, section: str = "headline") -> Article:
     """
     Async wrapper for article summarization.
 
     Args:
         article: Article to summarize
         config: Gemini configuration
+        section: Newsletter section for section-specific prompts
 
     Returns:
         Article with AI summary
     """
     # Run the synchronous API call in a thread pool to avoid blocking
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, summarize_article, article, config)
+    return await loop.run_in_executor(None, summarize_article, article, config, section)
 
 
 async def summarize_articles_async(articles: List[Article], config: dict,

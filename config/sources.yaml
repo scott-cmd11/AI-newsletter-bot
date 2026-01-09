@@ -271,3 +271,69 @@ theme_of_week:
   length: 150  # words
   style: "An editorial insight that connects the week's major themes"
 
+# Newsletter Section Configuration
+# ---------------------------------
+# Controls how articles are organized into sections for Scott's format
+sections:
+  headlines:
+    target_count: 8  # 8-10 range, use 8 as minimum
+    governance_ratio: 0.6  # 60% governance/policy, 40% capabilities/research
+    required_canadian_gov: 1  # Must have at least 1 Canadian government story
+    required_governance: 1  # Must have at least 1 governance/regulation story
+
+  bright_spots:
+    target_count: 2  # 2-3 range, use 2 as minimum
+    keywords:
+      - breakthrough
+      - cure
+      - innovation
+      - success
+      - achievement
+      - milestone
+      - wins
+      - discovery
+      - medical advance
+      - health benefit
+      - positive development
+
+  tools:
+    target_count: 1
+    max_age_days: 3  # Prefer recent tool releases
+
+  deep_dives:
+    target_count: 4  # 4-5 range, use 4 as minimum
+    source_keywords:
+      - arxiv
+      - research
+      - journal
+      - paper
+      - study
+      - white paper
+      - report
+      - findings
+
+  grain_quality:
+    enabled: true  # Auto-include if agriculture articles found
+    keywords:
+      - agriculture
+      - farming
+      - grain
+      - crop
+      - harvest
+      - agricultural
+      - farm
+      - wheat
+      - corn
+      - rice
+      - quality control
+      - soil
+      - farmer
+
+# Sentiment Balance Target
+# -------------------------
+# Newsletter aims for balanced sentiment distribution
+sentiment:
+  target_concerns: 0.40  # Risks, problems, concerns (40%)
+  target_opportunities: 0.35  # Breakthroughs, solutions, innovations (35%)
+  target_neutral: 0.25  # Factual reporting without clear sentiment (25%)
+
