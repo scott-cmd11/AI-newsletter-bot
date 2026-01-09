@@ -15,8 +15,10 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from sources.rss_fetcher import Article
-from processors.summarizer import summarize_articles, generate_theme_of_week
-from formatters.email_formatter import format_newsletter_html
+from processors.summarizer import summarize_articles, summarize_article, generate_theme_of_week
+from processors.section_classifier import classify_all_articles
+from processors.article_selector import auto_select_articles
+from formatters.email_formatter import format_newsletter_html, format_newsletter_html_sections
 
 logger = logging.getLogger(__name__)
 
@@ -177,3 +179,108 @@ class NewsletterService:
         except Exception as e:
             logger.error(f"Error reading newsletter file: {e}")
             return None
+
+    def enrich_articles_with_sections(self, articles: List[Article]) -> Dict[str, List[Article]]:
+        """
+        Enrich articles and organize into Scott's format sections.
+
+        Uses the new section-based workflow:
+        1. Classify articles by section (headline, bright_spot, tool, deep_dive, grain_quality)
+        2. Auto-select articles by Scott's content criteria
+        3. Generate AI summaries with section-specific prompts
+        4. Detect sentiment and Canadian context
+
+        Args:
+            articles: List of articles to process
+
+        Returns:
+            Dict with sections as keys and enriched articles as values
+        """
+        if not articles:
+            logger.warning("No articles to enrich")
+            return {
+                'headlines': [],
+                'bright_spots': [],
+                'tools': [],
+                'deep_dives': [],
+                'grain_quality': []
+            }
+
+        api_key = os.getenv('GEMINI_API_KEY')
+        if not api_key:
+            logger.warning("GEMINI_API_KEY not set - cannot generate AI summaries")
+            return {
+                'headlines': [],
+                'bright_spots': [],
+                'tools': [],
+                'deep_dives': [],
+                'grain_quality': []
+            }
+
+        try:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"🚀 STARTING SECTION-BASED NEWSLETTER GENERATION")
+            logger.info(f"{'='*60}")
+            logger.info(f"Processing {len(articles)} articles")
+
+            # Step 1 & 2: Classify and auto-select articles by content criteria
+            # (auto_select_articles handles both classification and selection)
+            logger.info(f"\n📂 Step 1-2: Classifying and auto-selecting articles...")
+            selected = auto_select_articles(articles, self.config, warn_on_missing=True)
+
+            # Step 3: Generate AI summaries with section-specific prompts
+            logger.info(f"\n🤖 Step 3: Generating AI summaries with section-specific prompts...")
+            gemini_config = self.config.get('gemini', {})
+
+            for section, section_articles in selected.items():
+                if not section_articles:
+                    continue
+
+                logger.info(f"   Summarizing {len(section_articles)} {section} articles...")
+
+                for i, article in enumerate(section_articles, 1):
+                    logger.info(f"     [{i}/{len(section_articles)}] {article.title[:50]}...")
+
+                    # Generate summary with section-specific prompt
+                    summarize_article(article, gemini_config, section=section)
+
+            logger.info(f"\n{'='*60}")
+            logger.info(f"✅ ENRICHMENT COMPLETE")
+            logger.info(f"{'='*60}")
+
+            return selected
+
+        except Exception as e:
+            logger.error(f"Error in section-based enrichment: {e}", exc_info=True)
+            return {
+                'headlines': [],
+                'bright_spots': [],
+                'tools': [],
+                'deep_dives': [],
+                'grain_quality': []
+            }
+
+    def generate_newsletter_html_sections(self, selected_articles: Dict[str, List[Article]]) -> str:
+        """
+        Generate HTML newsletter using Scott's section-based format.
+
+        Args:
+            selected_articles: Dict with section keys and article lists
+
+        Returns:
+            HTML newsletter content
+        """
+        try:
+            logger.info(f"Generating section-based newsletter HTML")
+
+            html = format_newsletter_html_sections(
+                selected_articles=selected_articles,
+                config=self.config
+            )
+
+            logger.info("Newsletter HTML generated successfully")
+            return html
+
+        except Exception as e:
+            logger.error(f"Error generating newsletter HTML: {e}")
+            raise
