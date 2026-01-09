@@ -837,8 +837,7 @@ def health():
     """Health check endpoint (no auth required)."""
     return jsonify({
         "status": "ok",
-        "auth_configured": bool(AUTH_PASSWORD),
-        "auth_password_length": len(AUTH_PASSWORD) if AUTH_PASSWORD else 0
+        "version": "2.0"
     })
 
 
