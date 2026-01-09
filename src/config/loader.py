@@ -155,6 +155,20 @@ def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
     if not raw_config:
         raise ConfigError("Config file is empty")
 
+    # Fix topics format if it's a dict instead of list
+    if isinstance(raw_config.get('topics'), dict):
+        # Convert dict format to list format
+        topics_list = []
+        for topic_name, topic_data in raw_config.get('topics', {}).items():
+            if isinstance(topic_data, dict):
+                topics_list.append({
+                    'name': topic_name,
+                    'keywords': topic_data.get('keywords', []),
+                    'category': topic_data.get('category', topic_name),
+                    'priority': topic_data.get('priority_boost', 1.0)
+                })
+        raw_config['topics'] = topics_list
+
     # Validate with Pydantic
     try:
         validated = FullConfig(**raw_config)
