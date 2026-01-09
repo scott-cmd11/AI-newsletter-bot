@@ -6,10 +6,23 @@ Fetches articles from Google Alerts and other RSS feeds.
 """
 
 import feedparser
+import logging
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from typing import List, Optional
 import re
+import sys
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Try to import cache module
+try:
+    from cache import get_cached_articles, cache_articles
+    CACHE_AVAILABLE = True
+except ImportError:
+    CACHE_AVAILABLE = False
+    logger.debug("Cache module not available")
 
 
 @dataclass
@@ -25,7 +38,37 @@ class Article:
     score: float = 0.0
     ai_summary: str = ""
     ai_commentary: str = ""
-    
+
+    def __post_init__(self):
+        """Validate article data."""
+        # Ensure title is not empty
+        if not self.title or not self.title.strip():
+            logger.warning(f"Article has empty title, using placeholder")
+            self.title = "[No title]"
+
+        # Ensure URL is not empty
+        if not self.url or not self.url.strip():
+            logger.warning(f"Article '{self.title}' has empty URL")
+            self.url = ""
+
+        # Ensure source is not empty
+        if not self.source or not self.source.strip():
+            self.source = "Unknown"
+
+        # Validate priority
+        if self.priority not in ['low', 'medium', 'high']:
+            logger.warning(f"Invalid priority '{self.priority}', using 'medium'")
+            self.priority = "medium"
+
+        # Ensure summary is a string
+        if not isinstance(self.summary, str):
+            self.summary = str(self.summary) if self.summary else ""
+
+        # Ensure published is a datetime
+        if not isinstance(self.published, datetime):
+            logger.warning(f"Invalid published date, using current time")
+            self.published = datetime.now()
+
     def to_dict(self) -> dict:
         return {
             "title": self.title,
@@ -76,25 +119,29 @@ def fetch_google_alerts(alerts_config: List[dict], max_age_days: int = 7) -> Lis
     for alert in alerts_config:
         url = alert.get('url', '')
         if not url:
+            logger.warning(f"Skipping '{alert.get('name', 'Unknown')}' - no URL configured")
             print(f"  ⚠️  Skipping '{alert.get('name', 'Unknown')}' - no URL configured")
             continue
-            
-        print(f"  📡 Fetching: {alert.get('name', url[:50])}")
-        
+
+        alert_name = alert.get('name', url[:50])
+        print(f"  📡 Fetching: {alert_name}")
+        logger.debug(f"Fetching Google Alert: {alert_name}")
+
         try:
             feed = feedparser.parse(url)
-            
+
             if feed.bozo and not feed.entries:
+                logger.warning(f"Error parsing feed {alert_name}: {feed.bozo_exception}")
                 print(f"    ⚠️  Error parsing feed: {feed.bozo_exception}")
                 continue
-                
+
             for entry in feed.entries:
                 pub_date = parse_date(entry)
-                
+
                 # Skip old articles
                 if pub_date and pub_date < cutoff_date:
                     continue
-                    
+
                 article = Article(
                     title=clean_html(entry.get('title', 'No title')),
                     url=entry.get('link', ''),
@@ -104,10 +151,12 @@ def fetch_google_alerts(alerts_config: List[dict], max_age_days: int = 7) -> Lis
                     priority=alert.get('priority', 'medium')
                 )
                 articles.append(article)
-                
+
             print(f"    ✓ Found {len(feed.entries)} entries")
-            
+            logger.debug(f"Found {len(feed.entries)} entries in {alert_name}")
+
         except Exception as e:
+            logger.error(f"Error fetching Google Alert {alert_name}: {e}")
             print(f"    ❌ Error: {e}")
             
     return articles
@@ -130,24 +179,28 @@ def fetch_rss_feeds(feeds_config: List[dict], max_age_days: int = 7) -> List[Art
     for feed_config in feeds_config:
         url = feed_config.get('url', '')
         if not url:
+            logger.warning(f"RSS feed config missing URL: {feed_config.get('name', 'Unknown')}")
             continue
-            
-        print(f"  📡 Fetching: {feed_config.get('name', url[:50])}")
-        
+
+        feed_name = feed_config.get('name', url[:50])
+        print(f"  📡 Fetching: {feed_name}")
+        logger.debug(f"Fetching RSS feed: {feed_name}")
+
         try:
             feed = feedparser.parse(url)
-            
+
             if feed.bozo and not feed.entries:
+                logger.warning(f"Error parsing RSS feed {feed_name}: {feed.bozo_exception}")
                 print(f"    ⚠️  Warning: {feed.bozo_exception}")
                 continue
-                
+
             count = 0
             for entry in feed.entries:
                 pub_date = parse_date(entry)
-                
+
                 if pub_date and pub_date < cutoff_date:
                     continue
-                    
+
                 article = Article(
                     title=clean_html(entry.get('title', 'No title')),
                     url=entry.get('link', ''),
@@ -159,44 +212,82 @@ def fetch_rss_feeds(feeds_config: List[dict], max_age_days: int = 7) -> List[Art
                 )
                 articles.append(article)
                 count += 1
-                
+
             print(f"    ✓ Found {count} recent articles")
-            
+            logger.debug(f"Found {count} recent articles in {feed_name}")
+
         except Exception as e:
+            logger.error(f"Error fetching RSS feed {feed_name}: {e}")
             print(f"    ❌ Error: {e}")
             
     return articles
 
 
-def fetch_all_articles(config: dict) -> List[Article]:
+def fetch_all_articles(config: dict, use_cache: bool = True) -> List[Article]:
     """
     Fetch articles from all configured sources.
-    
+
     Args:
         config: Full configuration dictionary
-        
+        use_cache: Use cached articles if available (default True)
+
     Returns:
         Combined list of all articles
     """
+    # Try to use cache first
+    if use_cache and CACHE_AVAILABLE:
+        cached = get_cached_articles("articles")
+        if cached:
+            print("\n✓ Using cached articles")
+            logger.info(f"Using {len(cached)} cached articles")
+            # Reconstruct Article objects from cached dicts
+            articles_list = []
+            for article_dict in cached:
+                try:
+                    pub_date = article_dict.get('published')
+                    if pub_date and isinstance(pub_date, str):
+                        pub_date = datetime.fromisoformat(pub_date)
+                    article = Article(
+                        title=article_dict.get('title', ''),
+                        url=article_dict.get('url', ''),
+                        source=article_dict.get('source', ''),
+                        published=pub_date or datetime.now(),
+                        summary=article_dict.get('summary', ''),
+                        category=article_dict.get('category', ''),
+                        priority=article_dict.get('priority', 'medium'),
+                        score=article_dict.get('score', 0.0),
+                        ai_summary=article_dict.get('ai_summary', ''),
+                        ai_commentary=article_dict.get('ai_commentary', '')
+                    )
+                    articles_list.append(article)
+                except Exception as e:
+                    logger.warning(f"Error reconstructing cached article: {e}")
+            if articles_list:
+                return articles_list
+
     all_articles = []
     max_age = config.get('max_age_days', 7)
-    
+
     # Fetch from Google Alerts
     google_alerts = config.get('google_alerts', [])
     if google_alerts:
         print("\n📬 Fetching Google Alerts...")
+        logger.info(f"Fetching {len(google_alerts)} Google Alerts")
         alerts_articles = fetch_google_alerts(google_alerts, max_age)
         all_articles.extend(alerts_articles)
         print(f"  Total from Google Alerts: {len(alerts_articles)}")
-    
+        logger.info(f"Got {len(alerts_articles)} articles from Google Alerts")
+
     # Fetch from RSS feeds
     rss_feeds = config.get('rss_feeds', [])
     if rss_feeds:
         print("\n📰 Fetching RSS Feeds...")
+        logger.info(f"Fetching {len(rss_feeds)} RSS feeds")
         rss_articles = fetch_rss_feeds(rss_feeds, max_age)
         all_articles.extend(rss_articles)
         print(f"  Total from RSS Feeds: {len(rss_articles)}")
-    
+        logger.info(f"Got {len(rss_articles)} articles from RSS feeds")
+
     # Deduplicate by URL
     seen_urls = set()
     unique_articles = []
@@ -204,7 +295,13 @@ def fetch_all_articles(config: dict) -> List[Article]:
         if article.url not in seen_urls:
             seen_urls.add(article.url)
             unique_articles.append(article)
-            
+
     print(f"\n📊 Total unique articles: {len(unique_articles)}")
-    
+    logger.info(f"Total unique articles after deduplication: {len(unique_articles)}")
+
+    # Cache the articles
+    if CACHE_AVAILABLE:
+        cache_articles(unique_articles, "articles")
+        logger.debug(f"Cached {len(unique_articles)} articles")
+
     return unique_articles

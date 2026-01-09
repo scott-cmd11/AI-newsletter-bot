@@ -1,128 +1,3 @@
-#!/usr/bin/env python3
-"""
-AI Newsletter Bot - Web Interface
-
-A simple Flask web app for curating newsletter articles.
-"""
-
-import os
-import json
-import logging
-import webbrowser
-from datetime import datetime
-from pathlib import Path
-from threading import Timer
-from functools import wraps
-
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response
-
-logger = logging.getLogger(__name__)
-
-# Add src to path
-import sys
-sys.path.insert(0, str(Path(__file__).parent))
-
-from config.loader import load_config, ConfigError
-from services import ArticleService, NewsletterService, ReviewService
-
-app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
-
-# Password protection - set AUTH_PASSWORD env var in Render
-AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')
-
-def check_auth(password):
-    """Check if the password is correct."""
-    return password == AUTH_PASSWORD
-
-def authenticate():
-    """Send 401 response to prompt for password."""
-    return Response(
-        'Password required to access this site.\n'
-        'Please enter the password.',
-        401,
-        {'WWW-Authenticate': 'Basic realm="AI Newsletter Bot"'}
-    )
-
-def requires_auth(f):
-    """Decorator to require password on routes (only if AUTH_PASSWORD is set)."""
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if AUTH_PASSWORD:  # Only check if password is configured
-            auth = request.authorization
-            if not auth or not check_auth(auth.password):
-                return authenticate()
-        return f(*args, **kwargs)
-    return decorated
-
-# Paths
-BASE_DIR = Path(__file__).parent.parent
-OUTPUT_DIR = BASE_DIR / "output"
-
-# Global service instances (lazy initialized)
-_config = None
-_review_service = None
-_article_service = None
-_newsletter_service = None
-
-
-def get_config() -> dict:
-    """Get or load config."""
-    global _config
-    if _config is None:
-        try:
-            _config = load_config()
-        except ConfigError as e:
-            logger.error(f"Failed to load config: {e}")
-            raise
-    return _config
-
-
-def get_review_service() -> ReviewService:
-    """Get or initialize review service."""
-    global _review_service
-    if _review_service is None:
-        config = get_config()
-        _review_service = ReviewService(config, OUTPUT_DIR)
-    return _review_service
-
-
-def get_article_service() -> ArticleService:
-    """Get or initialize article service."""
-    global _article_service
-    if _article_service is None:
-        config = get_config()
-        _article_service = ArticleService(config)
-    return _article_service
-
-
-def get_newsletter_service() -> NewsletterService:
-    """Get or initialize newsletter service."""
-    global _newsletter_service
-    if _newsletter_service is None:
-        config = get_config()
-        _newsletter_service = NewsletterService(config, OUTPUT_DIR)
-    return _newsletter_service
-
-
-def load_html_template() -> str:
-    """Load HTML template from file."""
-    template_path = Path(__file__).parent / "templates" / "web_interface.html"
-    try:
-        with open(template_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        # Fallback if template file not found (shouldn't happen in production)
-        logger = logging.getLogger(__name__)
-        logger.error(f"HTML template not found at {template_path}")
-        return "<html><body><h1>Error: Template not found</h1></body></html>"
-
-
-# Load HTML Template at module level
-HTML_TEMPLATE = load_html_template()
-
-# Original inline template kept for reference during migration
-_ORIGINAL_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -354,7 +229,7 @@ _ORIGINAL_TEMPLATE = '''
             <a href="{{ url_for('fetch_articles') }}" class="btn btn-primary">🔄 Fetch New Articles</a>
         </div>
         {% else %}
-        
+
         <div class="stats">
             <div class="stat">
                 <div class="stat-value">{{ data.total_articles }}</div>
@@ -389,8 +264,8 @@ _ORIGINAL_TEMPLATE = '''
                 <div class="articles">
                     {% for article in articles[:10] %}
                     <div class="article {% if article.selected %}selected{% endif %}" data-score="{{ article.score }}">
-                        <input type="checkbox" 
-                               name="selected" 
+                        <input type="checkbox"
+                               name="selected"
                                value="{{ cat_name }}:{{ article.id }}"
                                {% if article.selected %}checked{% endif %}
                                onchange="updateCount()">
@@ -416,7 +291,7 @@ _ORIGINAL_TEMPLATE = '''
             </div>
             {% endfor %}
         </form>
-        
+
         <div class="selected-count" id="floating-count" style="display: none;">
             <span><strong id="float-count">0</strong> articles selected</span>
             <button onclick="generateNewsletter()" class="btn btn-primary">Generate →</button>
@@ -430,7 +305,7 @@ _ORIGINAL_TEMPLATE = '''
             document.getElementById('selected-count').textContent = checked;
             document.getElementById('float-count').textContent = checked;
             document.getElementById('floating-count').style.display = checked > 0 ? 'flex' : 'none';
-            
+
             // Update visual state
             document.querySelectorAll('.article').forEach(article => {
                 const checkbox = article.querySelector('input[type="checkbox"]');
@@ -441,23 +316,23 @@ _ORIGINAL_TEMPLATE = '''
         function selectTop() {
             // Uncheck all first
             document.querySelectorAll('input[name="selected"]').forEach(cb => cb.checked = false);
-            
+
             // Get all articles with scores and sort
             const articles = Array.from(document.querySelectorAll('.article'));
             articles.sort((a, b) => parseFloat(b.dataset.score) - parseFloat(a.dataset.score));
-            
+
             // Select top 8
             articles.slice(0, 8).forEach(article => {
                 article.querySelector('input[type="checkbox"]').checked = true;
             });
-            
+
             updateCount();
         }
 
         function generateNewsletter() {
             const form = document.getElementById('article-form');
             const formData = new FormData(form);
-            
+
             // Save selections first
             fetch('{{ url_for("save_selection") }}', {
                 method: 'POST',
@@ -472,203 +347,3 @@ _ORIGINAL_TEMPLATE = '''
     </script>
 </body>
 </html>
-'''
-
-LOADING_TEMPLATE = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Loading...</title>
-    <style>
-        body { font-family: sans-serif; background: #1a1a2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .loading { text-align: center; }
-        .spinner { width: 50px; height: 50px; border: 4px solid #333; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
-    <meta http-equiv="refresh" content="2;url={{ redirect_url }}">
-</head>
-<body>
-    <div class="loading">
-        <div class="spinner"></div>
-        <h2>{{ message }}</h2>
-        <p>Please wait...</p>
-    </div>
-</body>
-</html>
-'''
-
-RESULT_TEMPLATE = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Newsletter Generated</title>
-    <style>
-        body { font-family: sans-serif; background: #1a1a2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .success { text-align: center; background: #252540; padding: 50px; border-radius: 16px; }
-        .success h1 { color: #38ef7d; margin-bottom: 20px; }
-        .btn { display: inline-block; padding: 15px 30px; margin: 10px; border-radius: 8px; text-decoration: none; font-size: 1rem; }
-        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .btn-secondary { background: #333; color: white; }
-    </style>
-</head>
-<body>
-    <div class="success">
-        <h1>✅ Newsletter Generated!</h1>
-        <p style="margin-bottom: 30px;">Your newsletter is ready.</p>
-        <a href="{{ url_for('preview') }}" class="btn btn-primary" target="_blank">📧 View Newsletter</a>
-        <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to Selection</a>
-    </div>
-</body>
-</html>
-'''
-
-
-@app.route('/')
-@requires_auth
-def index():
-    """Display article curation interface."""
-    try:
-        review_service = get_review_service()
-        data = review_service.load_review()
-        return render_template_string(HTML_TEMPLATE, data=data)
-    except Exception as e:
-        logger.error(f"Error in index route: {e}")
-        return render_template_string(HTML_TEMPLATE, data=None)
-
-
-@app.route('/fetch')
-@requires_auth
-def fetch_articles():
-    """Fetch and score new articles."""
-    try:
-        logger.info("Fetch articles request")
-        review_service = get_review_service()
-
-        # Fetch articles and create review
-        review_data = review_service.fetch_and_create_review(use_cache=False)
-
-        if not review_data or not review_data.get('categories'):
-            logger.warning("No articles available to fetch")
-            return redirect(url_for('index'))
-
-        logger.info(f"Fetched {review_data.get('total_articles', 0)} articles")
-        return redirect(url_for('index'))
-
-    except Exception as e:
-        logger.error(f"Error in fetch_articles route: {e}")
-        return redirect(url_for('index'))
-
-
-@app.route('/save', methods=['POST'])
-@requires_auth
-def save_selection():
-    """Save article selection."""
-    try:
-        logger.info("Save selection request")
-        review_service = get_review_service()
-
-        # Get selected article IDs
-        selected_ids = request.form.getlist('selected')
-
-        # Save selections
-        success, count = review_service.save_selections(selected_ids)
-
-        if success:
-            logger.info(f"Saved {count} article selections")
-            return jsonify({"status": "ok", "count": count})
-        else:
-            logger.error("Failed to save selections")
-            return jsonify({"status": "error", "count": 0}), 500
-
-    except Exception as e:
-        logger.error(f"Error in save_selection route: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@app.route('/generate')
-@requires_auth
-def generate():
-    """Generate newsletter from selected articles."""
-    try:
-        logger.info("Generate newsletter request")
-        review_service = get_review_service()
-        newsletter_service = get_newsletter_service()
-        article_service = get_article_service()
-
-        # Get selected articles
-        selected = review_service.get_selected_articles()
-        if not selected:
-            logger.warning("No articles selected for newsletter generation")
-            return redirect(url_for('index'))
-
-        logger.info(f"Generating newsletter from {len(selected)} selected articles")
-
-        # Reconstruct Article objects
-        articles = article_service.reconstruct_articles_from_dicts(selected)
-        if not articles:
-            logger.error("Failed to reconstruct articles")
-            return redirect(url_for('index'))
-
-        # Enrich with AI summaries and theme
-        articles, theme_of_week = newsletter_service.enrich_articles_with_ai(articles)
-
-        # Generate HTML
-        html = newsletter_service.generate_newsletter_html(articles, theme_of_week)
-
-        # Save newsletter
-        output_file = newsletter_service.save_newsletter(html)
-        logger.info(f"Newsletter saved to {output_file}")
-
-        return render_template_string(RESULT_TEMPLATE)
-
-    except Exception as e:
-        logger.error(f"Error in generate route: {e}")
-        return render_template_string(RESULT_TEMPLATE)
-
-
-@app.route('/preview')
-@requires_auth
-def preview():
-    """Preview the generated newsletter."""
-    try:
-        newsletter_service = get_newsletter_service()
-        html_content = newsletter_service.read_newsletter_html()
-        if html_content:
-            return html_content
-        return "<h1>No newsletter generated yet</h1>"
-    except Exception as e:
-        logger.error(f"Error in preview route: {e}")
-        return "<h1>Error loading newsletter</h1>"
-
-
-@app.route('/health')
-def health():
-    """Health check endpoint (no auth required)."""
-    return jsonify({
-        "status": "ok",
-        "auth_configured": bool(AUTH_PASSWORD),
-        "auth_password_length": len(AUTH_PASSWORD) if AUTH_PASSWORD else 0
-    })
-
-
-def open_browser():
-    webbrowser.open('http://127.0.0.1:5000')
-
-
-if __name__ == '__main__':
-    print("\n" + "=" * 50)
-    print("🤖 AI Newsletter Bot - Web Interface")
-    print("=" * 50)
-    
-    # Check if running locally (not on cloud)
-    port = int(os.environ.get('PORT', 5000))
-    is_local = port == 5000 and not os.environ.get('RENDER')
-    
-    if is_local:
-        print(f"\n🌐 Opening browser at http://127.0.0.1:{port}\n")
-        Timer(1.5, open_browser).start()
-    else:
-        print(f"\n🌐 Running on port {port}\n")
-    
-    # Run Flask
-    app.run(debug=False, host='0.0.0.0', port=port)

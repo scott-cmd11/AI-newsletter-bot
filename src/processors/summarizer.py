@@ -6,8 +6,10 @@ Uses Google Gemini to generate article summaries and commentary.
 """
 
 import os
+import logging
 from typing import List
 import json
+import asyncio
 
 # Import from parent
 import sys
@@ -15,26 +17,30 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from sources.rss_fetcher import Article
 
+logger = logging.getLogger(__name__)
+
 # Try to import Gemini
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
-    print("⚠️  google-generativeai not installed. Run: pip install google-generativeai")
+    logger.warning("google-generativeai not installed. Run: pip install google-generativeai")
 
 
-def init_gemini(api_key: str = None):
+def init_gemini(api_key: str = None) -> bool:
     """Initialize Gemini with API key."""
     if not GEMINI_AVAILABLE:
+        logger.error("Gemini not available - package not installed")
         return False
-        
+
     key = api_key or os.getenv('GEMINI_API_KEY')
     if not key:
-        print("⚠️  GEMINI_API_KEY not set. Set it in environment or .env file")
+        logger.error("GEMINI_API_KEY not set in environment")
         return False
-        
+
     genai.configure(api_key=key)
+    logger.debug("Gemini API configured successfully")
     return True
 
 
@@ -123,51 +129,129 @@ Respond in JSON format:
         article.ai_summary = result.get('summary', article.summary)
         article.ai_commentary = result.get('commentary', '')
         
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
         # If JSON parsing fails, use the raw response
+        logger.warning(f"JSON parsing failed for article '{article.title[:50]}': {e}")
         article.ai_summary = response.text[:500] if response else article.summary
         article.ai_commentary = ""
     except Exception as e:
-        print(f"    ⚠️  Summarization error: {e}")
+        logger.error(f"Summarization error for article '{article.title[:50]}': {e}")
         article.ai_summary = article.summary[:300]
         article.ai_commentary = ""
-        
+
     return article
 
 
-def summarize_articles(articles: List[Article], config: dict, 
-                       progress_callback=None) -> List[Article]:
+async def summarize_article_async(article: Article, config: dict) -> Article:
     """
-    Generate AI summaries for a list of articles.
-    
+    Async wrapper for article summarization.
+
+    Args:
+        article: Article to summarize
+        config: Gemini configuration
+
+    Returns:
+        Article with AI summary
+    """
+    # Run the synchronous API call in a thread pool to avoid blocking
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, summarize_article, article, config)
+
+
+async def summarize_articles_async(articles: List[Article], config: dict,
+                                   max_concurrent: int = 3) -> List[Article]:
+    """
+    Asynchronously generate AI summaries for a list of articles.
+    Uses concurrent requests with rate limiting to avoid API throttling.
+
     Args:
         articles: List of articles to summarize
         config: Full configuration dictionary
-        progress_callback: Optional callback function for progress updates
-        
+        max_concurrent: Maximum concurrent API requests (default 3 to avoid rate limits)
+
     Returns:
         List of articles with AI summaries
     """
     gemini_config = config.get('gemini', {})
-    
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    async def summarize_with_semaphore(article: Article) -> Article:
+        """Summarize article with concurrency control."""
+        async with semaphore:
+            return await summarize_article_async(article, gemini_config)
+
+    logger.info(f"Starting parallel summarization for {len(articles)} articles (max {max_concurrent} concurrent)")
+    tasks = [summarize_with_semaphore(article) for article in articles]
+    summarized = await asyncio.gather(*tasks)
+    logger.info(f"Parallel summarization complete for {len(summarized)} articles")
+
+    return summarized
+
+
+def summarize_articles(articles: List[Article], config: dict,
+                       progress_callback=None, parallel: bool = True) -> List[Article]:
+    """
+    Generate AI summaries for a list of articles.
+    Can use parallel async calls for better performance.
+
+    Args:
+        articles: List of articles to summarize
+        config: Full configuration dictionary
+        progress_callback: Optional callback function for progress updates
+        parallel: Use parallel async calls (default True)
+
+    Returns:
+        List of articles with AI summaries
+    """
+    gemini_config = config.get('gemini', {})
+
     if not init_gemini():
+        logger.warning("Gemini not available - using original summaries")
         print("⚠️  Gemini not available - using original summaries")
         return articles
-        
+
     print(f"\n🤖 Generating AI summaries for {len(articles)} articles...")
-    
+    logger.info(f"Starting summarization for {len(articles)} articles (parallel={parallel})")
+
+    # Try parallel if requested, fall back to sequential
+    if parallel and len(articles) > 1:
+        try:
+            # Check if there's already an event loop
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop, create new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    summarized = loop.run_until_complete(
+                        summarize_articles_async(articles, config)
+                    )
+                finally:
+                    loop.close()
+            else:
+                # Already have running loop, use sequential fallback
+                logger.debug("Event loop already running, using sequential summarization")
+                summarized = _summarize_articles_sequential(articles, gemini_config)
+        except Exception as e:
+            logger.warning(f"Parallel summarization failed, falling back to sequential: {e}")
+            summarized = _summarize_articles_sequential(articles, gemini_config)
+    else:
+        summarized = _summarize_articles_sequential(articles, gemini_config)
+
+    print("  ✓ Summarization complete")
+    logger.info(f"Summarization complete for {len(summarized)} articles")
+
+    return summarized
+
+
+def _summarize_articles_sequential(articles: List[Article], config: dict) -> List[Article]:
+    """Sequential fallback for article summarization."""
     summarized = []
     for i, article in enumerate(articles, 1):
         print(f"  [{i}/{len(articles)}] {article.title[:50]}...")
-        
-        summarized_article = summarize_article(article, gemini_config)
+        summarized_article = summarize_article(article, config)
         summarized.append(summarized_article)
-        
-        if progress_callback:
-            progress_callback(i, len(articles))
-            
-    print("  ✓ Summarization complete")
-    
     return summarized
 
 
@@ -218,7 +302,7 @@ Respond in JSON:
         return json.loads(response_text)
         
     except Exception as e:
-        print(f"⚠️  Deep dive suggestion error: {e}")
+        logger.error(f"Deep dive suggestion error: {e}")
         return {"topic": "AI Governance Trends", "reasoning": "Default suggestion"}
 
 
@@ -282,5 +366,5 @@ Respond in JSON:
         return result
         
     except Exception as e:
-        print(f"⚠️  Theme of week generation error: {e}")
+        logger.error(f"Theme of week generation error: {e}")
         return {"title": "", "content": "", "enabled": False}

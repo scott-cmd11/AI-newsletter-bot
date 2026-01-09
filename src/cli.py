@@ -15,22 +15,14 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+from config.loader import load_config, ConfigError
 from sources.rss_fetcher import fetch_all_articles
 from processors.scorer import score_articles, get_top_articles
 from processors.summarizer import summarize_articles
 from formatters.email_formatter import format_newsletter_html, save_newsletter
-
-
-def load_config() -> dict:
-    """Load configuration from YAML file."""
-    config_path = Path(__file__).parent.parent / "config" / "sources.yaml"
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return yaml.safe_load(f)
 
 
 def get_output_dir() -> Path:
@@ -52,8 +44,12 @@ def cmd_scout(args):
     print("=" * 60)
     print("🔍 SCOUT: Fetching and Scoring Articles")
     print("=" * 60)
-    
-    config = load_config()
+
+    try:
+        config = load_config()
+    except ConfigError as e:
+        print(f"❌ Configuration error: {e}")
+        return
     
     # Fetch articles
     print("\n📥 Fetching from all sources...")
@@ -227,8 +223,12 @@ def cmd_compose(args):
     print("📧 COMPOSE: Generating Newsletter")
     print("=" * 60)
     print(f"\nGenerating newsletter with {len(selected)} selected articles...")
-    
-    config = load_config()
+
+    try:
+        config = load_config()
+    except ConfigError as e:
+        print(f"❌ Configuration error: {e}")
+        return
     
     # Check for API key for summaries
     api_key = os.getenv('GEMINI_API_KEY')
@@ -304,8 +304,12 @@ def cmd_quick(args):
     print("=" * 60)
     print("⚡ QUICK VIEW: Top Articles This Week")
     print("=" * 60)
-    
-    config = load_config()
+
+    try:
+        config = load_config()
+    except ConfigError as e:
+        print(f"❌ Configuration error: {e}")
+        return
     
     # Fetch and score
     articles = fetch_all_articles(config)

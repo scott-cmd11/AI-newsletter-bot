@@ -8,6 +8,7 @@ Scores and ranks articles based on relevance, recency, and topic matching.
 from typing import List
 from datetime import datetime
 import re
+import logging
 
 # Import from parent
 import sys
@@ -15,33 +16,68 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from sources.rss_fetcher import Article
 
+logger = logging.getLogger(__name__)
+
 
 def calculate_topic_score(article: Article, topics_config: dict) -> tuple[float, str]:
     """
     Calculate topic relevance score and classify article.
-    
+
+    Args:
+        article: Article to score
+        topics_config: Topics configuration dictionary
+
     Returns:
         Tuple of (score_boost, matched_category)
     """
-    text = f"{article.title} {article.summary}".lower()
-    
-    best_score = 0.0
-    best_category = ""
-    
-    for category, config in topics_config.items():
-        keywords = config.get('keywords', [])
-        boost = config.get('priority_boost', 1.0)
-        
-        # Count keyword matches
-        matches = sum(1 for kw in keywords if kw.lower() in text)
-        
-        if matches > 0:
-            category_score = matches * boost
-            if category_score > best_score:
-                best_score = category_score
-                best_category = category
-                
-    return best_score, best_category
+    try:
+        # Validate inputs
+        if not article:
+            logger.warning("calculate_topic_score called with None article")
+            return 0.0, ""
+
+        if not topics_config:
+            return 0.0, ""
+
+        # Build text for matching (handle None values)
+        title = article.title or ""
+        summary = article.summary or ""
+        text = f"{title} {summary}".lower()
+
+        best_score = 0.0
+        best_category = ""
+
+        for category, config in topics_config.items():
+            if not config:
+                continue
+
+            keywords = config.get('keywords', [])
+            if not keywords:
+                continue
+
+            boost = config.get('priority_boost', 1.0)
+
+            # Validate boost
+            try:
+                boost = float(boost)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid boost value {boost} for category {category}, using 1.0")
+                boost = 1.0
+
+            # Count keyword matches
+            matches = sum(1 for kw in keywords if kw and kw.lower() in text)
+
+            if matches > 0:
+                category_score = matches * boost
+                if category_score > best_score:
+                    best_score = category_score
+                    best_category = category
+
+        return best_score, best_category
+
+    except Exception as e:
+        logger.error(f"Error in calculate_topic_score: {e}")
+        return 0.0, ""
 
 
 def calculate_canadian_score(article: Article, canadian_keywords: List[str], boost: float) -> float:
