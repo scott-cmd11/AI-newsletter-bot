@@ -8,10 +8,12 @@ Business logic for:
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 
 from sources.rss_fetcher import Article, fetch_all_articles
 from processors.scorer import score_articles
+from .personalization_service import PersonalizationService
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +21,20 @@ logger = logging.getLogger(__name__)
 class ArticleService:
     """Service for managing articles (fetch, score, categorize)."""
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], output_dir: Optional[Path] = None):
         """
         Initialize article service.
 
         Args:
             config: Configuration dictionary
+            output_dir: Optional output directory for personalization
         """
         self.config = config
+        self.output_dir = output_dir
+        self.personalization_service = None
+        if output_dir:
+            self.personalization_service = PersonalizationService(output_dir)
+            self.personalization_service.analyze_historical_selections()
         logger.debug("ArticleService initialized")
 
     def fetch_and_score_articles(self, use_cache: bool = True) -> List[Article]:
@@ -58,12 +66,14 @@ class ArticleService:
             logger.error(f"Error in fetch_and_score_articles: {e}")
             raise
 
-    def categorize_articles(self, articles: List[Article]) -> Dict[str, List[Dict[str, Any]]]:
+    def categorize_articles(self, articles: List[Article],
+                           apply_personalization: bool = False) -> Dict[str, List[Dict[str, Any]]]:
         """
         Group articles by category and convert to dictionaries.
 
         Args:
             articles: List of Article objects
+            apply_personalization: Apply personalization scores if available
 
         Returns:
             Dictionary mapping category names to article lists
@@ -90,6 +100,12 @@ class ArticleService:
                 "selected": False,
                 "category": category
             }
+
+            # Apply personalization if available
+            if apply_personalization and self.personalization_service:
+                article_dict["predicted_likelihood"] = self.personalization_service.predict_selection_likelihood(article_dict)
+                article_dict["boosted_score"] = self.personalization_service.boost_article_score(article_dict)
+
             categories[category].append(article_dict)
 
         logger.debug(f"Categorized {len(articles)} articles into {len(categories)} categories")
@@ -176,3 +192,90 @@ class ArticleService:
 
         logger.debug(f"Reconstructed {len(articles)} Article objects from dictionaries")
         return articles
+
+    def get_personalized_recommendations(self, articles: List[Article],
+                                        count: int = 8) -> List[Dict[str, Any]]:
+        """
+        Get personalized article recommendations based on user preferences.
+
+        Args:
+            articles: List of scored articles
+            count: Number of recommendations to return
+
+        Returns:
+            Top N articles with personalization scores, or empty if personalization unavailable
+        """
+        if not self.personalization_service:
+            logger.warning("Personalization service not initialized")
+            return []
+
+        # Convert articles to dictionaries
+        article_dicts = [
+            {
+                "title": a.title,
+                "url": a.url,
+                "source": a.source,
+                "score": a.score,
+                "summary": a.summary,
+                "category": a.category or "uncategorized",
+                "published": a.published.isoformat() if a.published else None,
+            }
+            for a in articles
+        ]
+
+        # Get recommendations
+        recommendations = self.personalization_service.get_recommended_articles(
+            article_dicts, count=count
+        )
+
+        logger.info(f"Generated {len(recommendations)} personalized recommendations")
+        return recommendations
+
+    def get_auto_suggestions(self, articles: List[Article],
+                           threshold: int = 75) -> List[Dict[str, Any]]:
+        """
+        Get auto-suggested articles that match user preferences with high confidence.
+
+        Args:
+            articles: List of scored articles
+            threshold: Likelihood threshold (0-100) for auto-suggestions
+
+        Returns:
+            Articles with predicted_likelihood >= threshold
+        """
+        if not self.personalization_service:
+            logger.warning("Personalization service not initialized")
+            return []
+
+        # Convert articles to dictionaries
+        article_dicts = [
+            {
+                "title": a.title,
+                "url": a.url,
+                "source": a.source,
+                "score": a.score,
+                "summary": a.summary,
+                "category": a.category or "uncategorized",
+                "published": a.published.isoformat() if a.published else None,
+            }
+            for a in articles
+        ]
+
+        # Get suggestions
+        suggestions = self.personalization_service.get_auto_suggestions(
+            article_dicts, threshold=threshold
+        )
+
+        logger.info(f"Found {len(suggestions)} auto-suggestion candidates (threshold={threshold}%)")
+        return suggestions
+
+    def get_preference_profile(self) -> Optional[Dict[str, Any]]:
+        """
+        Get user preference profile if personalization is available.
+
+        Returns:
+            Preference profile dictionary or None
+        """
+        if self.personalization_service:
+            return self.personalization_service.preference_profile.to_dict()
+        return None

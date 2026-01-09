@@ -29,16 +29,19 @@ class ReviewService:
             output_dir: Output directory for storing reviews
         """
         self.config = config
-        self.article_service = ArticleService(config)
+        self.output_dir = output_dir
+        self.article_service = ArticleService(config, output_dir=output_dir)
         self.repository = ReviewRepository(output_dir)
         logger.debug("ReviewService initialized")
 
-    def fetch_and_create_review(self, use_cache: bool = True) -> Dict[str, Any]:
+    def fetch_and_create_review(self, use_cache: bool = True,
+                               apply_personalization: bool = True) -> Dict[str, Any]:
         """
         Fetch articles and create a review for curation.
 
         Args:
             use_cache: Use cached articles if available
+            apply_personalization: Apply personalization scores if available
 
         Returns:
             Review data with articles grouped by category
@@ -52,14 +55,22 @@ class ReviewService:
                 logger.warning("No articles available for review")
                 return self._create_empty_review()
 
-            # Categorize articles
-            categories = self.article_service.categorize_articles(articles)
+            # Categorize articles with optional personalization
+            categories = self.article_service.categorize_articles(
+                articles, apply_personalization=apply_personalization
+            )
 
             # Create review structure
             review_data = self.repository.create_review(
                 [art for cat_arts in categories.values() for art in cat_arts]
             )
             review_data['categories'] = categories
+
+            # Add preference profile if personalization is available
+            profile = self.article_service.get_preference_profile()
+            if profile:
+                review_data['preference_profile'] = profile
+                logger.info(f"Added preference profile to review")
 
             logger.info(f"Created review with {len(articles)} articles in {len(categories)} categories")
 

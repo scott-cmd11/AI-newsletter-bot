@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config.loader import load_config, ConfigError
 from services import ArticleService, NewsletterService, ReviewService
+from sources.rss_fetcher import Article
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
@@ -92,7 +93,7 @@ def get_article_service() -> ArticleService:
     global _article_service
     if _article_service is None:
         config = get_config()
-        _article_service = ArticleService(config)
+        _article_service = ArticleService(config, output_dir=OUTPUT_DIR)
     return _article_service
 
 
@@ -530,6 +531,14 @@ def index():
     try:
         review_service = get_review_service()
         data = review_service.load_review()
+
+        # Get personalization data if available
+        if data and 'preference_profile' not in data:
+            article_service = get_article_service()
+            profile = article_service.get_preference_profile()
+            if profile:
+                data['preference_profile'] = profile
+
         return render_template_string(HTML_TEMPLATE, data=data)
     except Exception as e:
         logger.error(f"Error in index route: {e}")
@@ -639,6 +648,159 @@ def preview():
     except Exception as e:
         logger.error(f"Error in preview route: {e}")
         return "<h1>Error loading newsletter</h1>"
+
+
+@app.route('/api/preference-profile')
+@requires_auth
+def get_preference_profile_api():
+    """Get user preference profile from personalization."""
+    try:
+        article_service = get_article_service()
+        profile = article_service.get_preference_profile()
+
+        if profile:
+            return jsonify({
+                "status": "ok",
+                "profile": profile
+            })
+        else:
+            return jsonify({
+                "status": "no_profile",
+                "message": "Personalization data not available yet"
+            }), 404
+
+    except Exception as e:
+        logger.error(f"Error getting preference profile: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/predictions', methods=['POST'])
+@requires_auth
+def get_article_predictions():
+    """Get personalization predictions for articles."""
+    try:
+        article_service = get_article_service()
+
+        # Get articles from request
+        articles = request.json.get('articles', [])
+        if not articles:
+            return jsonify({
+                "status": "error",
+                "message": "No articles provided"
+            }), 400
+
+        predictions = []
+        for article in articles:
+            if article_service.personalization_service:
+                likelihood = article_service.personalization_service.predict_selection_likelihood(article)
+                boosted_score = article_service.personalization_service.boost_article_score(article)
+                predictions.append({
+                    "article_id": article.get('id'),
+                    "title": article.get('title'),
+                    "predicted_likelihood": likelihood,
+                    "boosted_score": boosted_score,
+                    "original_score": article.get('score')
+                })
+
+        return jsonify({
+            "status": "ok",
+            "predictions": predictions
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting article predictions: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/recommendations')
+@requires_auth
+def get_recommendations():
+    """Get personalized article recommendations."""
+    try:
+        review_service = get_review_service()
+        data = review_service.load_review()
+
+        if not data or not data.get('categories'):
+            return jsonify({
+                "status": "error",
+                "message": "No articles available"
+            }), 404
+
+        # Get all articles from categories
+        all_articles = []
+        for category, articles in data.get('categories', {}).items():
+            if isinstance(articles, list):
+                all_articles.extend(articles)
+
+        # Get recommendations
+        article_service = get_article_service()
+        recommendations = article_service.get_personalized_recommendations(
+            [Article(
+                title=a['title'],
+                url=a['url'],
+                source=a['source'],
+                published=datetime.fromisoformat(a['published']) if a.get('published') else datetime.now(),
+                summary=a.get('summary', ''),
+                category=a.get('category', ''),
+                score=a.get('score', 0.0)
+            ) for a in all_articles],
+            count=8
+        )
+
+        return jsonify({
+            "status": "ok",
+            "recommendations": recommendations
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/auto-suggestions')
+@requires_auth
+def get_auto_suggestions():
+    """Get auto-suggested articles matching user preferences."""
+    try:
+        review_service = get_review_service()
+        data = review_service.load_review()
+
+        if not data or not data.get('categories'):
+            return jsonify({
+                "status": "error",
+                "message": "No articles available"
+            }), 404
+
+        # Get all articles from categories
+        all_articles = []
+        for category, articles in data.get('categories', {}).items():
+            if isinstance(articles, list):
+                all_articles.extend(articles)
+
+        # Get suggestions
+        article_service = get_article_service()
+        suggestions = article_service.get_auto_suggestions(
+            [Article(
+                title=a['title'],
+                url=a['url'],
+                source=a['source'],
+                published=datetime.fromisoformat(a['published']) if a.get('published') else datetime.now(),
+                summary=a.get('summary', ''),
+                category=a.get('category', ''),
+                score=a.get('score', 0.0)
+            ) for a in all_articles],
+            threshold=75
+        )
+
+        return jsonify({
+            "status": "ok",
+            "suggestions": suggestions,
+            "count": len(suggestions)
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting auto-suggestions: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/health')
