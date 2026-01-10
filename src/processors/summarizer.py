@@ -498,3 +498,197 @@ Respond in JSON:
     except Exception as e:
         logger.error(f"Theme of week generation error: {e}")
         return {"title": "", "content": "", "enabled": False}
+
+
+# ============================================================================
+# VIBECODING FRAMEWORK: The Editor Agent (YODA Filter)
+# ============================================================================
+
+def generate_curated_report(raw_intel_path: Path = None, output_path: Path = None, config: dict = None) -> dict:
+    """
+    The Editor Agent: Apply the Socratic YODA filter to raw intelligence.
+    
+    This function implements the three-level Socratic processing:
+    - Level 1 (Exploration): Load all raw items
+    - Level 2 (Examination): Filter by category relevance and quality
+    - Level 3 (Expansion): Generate AI summaries with Scott's voice
+    
+    Args:
+        raw_intel_path: Path to raw_intel.json
+        output_path: Path to save curated_report.json
+        config: Configuration dictionary
+        
+    Returns:
+        The curated report dictionary
+    """
+    from pathlib import Path as PathLib
+    
+    if raw_intel_path is None:
+        raw_intel_path = PathLib(__file__).parent.parent.parent / 'data' / 'raw_intel.json'
+    
+    if output_path is None:
+        output_path = PathLib(__file__).parent.parent.parent / 'data' / 'curated_report.json'
+    
+    if config is None:
+        config = {'gemini': {'model': 'models/gemini-2.0-flash'}}
+    
+    # Initialize Gemini
+    if not init_gemini():
+        logger.error("Cannot run Editor without Gemini API")
+        return {}
+    
+    logger.info("=" * 60)
+    logger.info("🧠 EDITOR AGENT: Applying YODA Filter")
+    logger.info("=" * 60)
+    
+    # ========== LEVEL 1: EXPLORATION ==========
+    logger.info("📖 Level 1 (Exploration): Loading raw intelligence...")
+    
+    try:
+        with open(raw_intel_path, 'r', encoding='utf-8') as f:
+            raw_intel = json.load(f)
+    except FileNotFoundError:
+        logger.error(f"Raw intel not found: {raw_intel_path}")
+        return {}
+    
+    articles = raw_intel.get('articles', [])
+    logger.info(f"   Loaded {len(articles)} raw items")
+    
+    # ========== LEVEL 2: EXAMINATION (The Filter) ==========
+    logger.info("🔍 Level 2 (Examination): Filtering by relevance...")
+    
+    # Group by category
+    categorized = {
+        'headlines': [],
+        'bright_spots': [],
+        'tools': [],
+        'deep_dives': [],
+        'grain_quality': [],
+        'learning': []
+    }
+    
+    # Blacklist keywords for filtering out noise
+    blacklist = ['crypto', 'nft', 'blockchain', 'bitcoin', 'metaverse', 'web3']
+    
+    for item in articles:
+        title_lower = item.get('title', '').lower()
+        summary_lower = item.get('summary', '').lower()
+        content = f"{title_lower} {summary_lower}"
+        
+        # Skip blacklisted content
+        if any(bl in content for bl in blacklist):
+            continue
+        
+        category = item.get('category', 'headline')
+        
+        # Map source categories to newsletter sections
+        if category == 'vertical_grain':
+            categorized['grain_quality'].append(item)
+        elif category == 'deep_dive':
+            categorized['deep_dives'].append(item)
+        elif category == 'tools':
+            categorized['tools'].append(item)
+        elif category == 'bright_spot':
+            categorized['bright_spots'].append(item)
+        else:
+            categorized['headlines'].append(item)
+    
+    # Log filtering results
+    for section, items in categorized.items():
+        logger.info(f"   {section}: {len(items)} items")
+    
+    # ========== LEVEL 3: EXPANSION (Synthesis) ==========
+    logger.info("✨ Level 3 (Expansion): Generating AI summaries...")
+    
+    curated = {
+        'headlines': [],
+        'bright_spots': [],
+        'tools': [],
+        'deep_dives': [],
+        'grain_quality': [],
+        'learning': [],
+        'theme_of_week': None
+    }
+    
+    # Process each section with AI summaries
+    section_limits = {
+        'headlines': 8,
+        'bright_spots': 2,
+        'tools': 2,
+        'deep_dives': 4,
+        'grain_quality': 5,
+        'learning': 3
+    }
+    
+    for section, items in categorized.items():
+        limit = section_limits.get(section, 3)
+        selected = items[:limit]
+        
+        if not selected:
+            continue
+            
+        logger.info(f"   Processing {len(selected)} {section}...")
+        
+        for item in selected:
+            # Create a minimal Article-like object for the prompt builder
+            article = type('Article', (), {
+                'title': item.get('title', ''),
+                'url': item.get('link', ''),
+                'summary': item.get('summary', ''),
+                'source': item.get('source', ''),
+                'category': section
+            })()
+            
+            # Map section names for prompt
+            prompt_section = section.rstrip('s')
+            if prompt_section == 'headline':
+                prompt_section = 'headline'
+            elif prompt_section == 'grain_qualit':
+                prompt_section = 'grain_quality'
+            
+            # Generate AI summary
+            try:
+                prompt = build_scott_voice_prompt(article, prompt_section, config)
+                model_name = config.get('gemini', {}).get('model', 'models/gemini-2.0-flash')
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                
+                ai_summary = response.text.strip() if response.text else item.get('summary', '')
+            except Exception as e:
+                logger.warning(f"AI summary failed for '{item.get('title', '')[:30]}...': {e}")
+                ai_summary = item.get('summary', '')
+            
+            curated[section].append({
+                'title': item.get('title', ''),
+                'link': item.get('link', ''),
+                'summary': ai_summary,
+                'source': item.get('source', ''),
+            })
+    
+    # Generate Theme of the Week
+    logger.info("   Generating Theme of the Week...")
+    all_articles = []
+    for section_items in curated.values():
+        if isinstance(section_items, list):
+            for item in section_items:
+                # Create Article-like objects
+                art = type('Article', (), {
+                    'title': item.get('title', ''),
+                    'category': 'general',
+                    'summary': item.get('summary', '')[:200]
+                })()
+                all_articles.append(art)
+    
+    if all_articles:
+        curated['theme_of_week'] = generate_theme_of_week(all_articles, config)
+    
+    # Save curated report
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(curated, f, indent=2, ensure_ascii=False)
+    
+    logger.info("=" * 60)
+    logger.info(f"💾 Curated report saved to: {output_path}")
+    logger.info("=" * 60)
+    
+    return curated

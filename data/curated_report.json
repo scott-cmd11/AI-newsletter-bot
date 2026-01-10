@@ -1,0 +1,67 @@
+{
+    "headlines": [
+        {
+            "title": "Commissioner of Canada Elections Will 'Explore the Use' of AI",
+            "link": "https://example.com/canada-elections-ai",
+            "summary": "The Office of the Commissioner of Canada Elections (OCCE) signalled it is exploring use of artificial intelligence to enhance its capacity to address emerging threats, including deepfakes. This move represents a significant step toward modernizing electoral oversight in Canada, ensuring the commission can respond to sophisticated disinformation campaigns that exploit generative AI capabilities.",
+            "source": "Government of Canada"
+        },
+        {
+            "title": "European Union Finalizes AI Act Implementation Timeline",
+            "link": "https://example.com/eu-ai-act",
+            "summary": "EU regulators announced the final implementation schedule for the AI Act, with high-risk AI systems facing compliance deadlines starting August 2025. Canadian exporters and tech companies operating in EU markets must now accelerate their compliance preparations.",
+            "source": "Reuters"
+        }
+    ],
+    "bright_spots": [
+        {
+            "title": "AI-Powered Early Cancer Detection Achieves 95% Accuracy",
+            "link": "https://example.com/cancer-ai",
+            "summary": "Researchers at the University of Toronto have developed an AI system that can detect early-stage cancers from routine blood tests with 95% accuracy, potentially saving thousands of lives annually through earlier intervention.",
+            "source": "Nature Medicine"
+        }
+    ],
+    "tools": [
+        {
+            "title": "Google Releases Gemini 3 with Enhanced Reasoning",
+            "link": "https://deepmind.google/gemini-3",
+            "summary": "Google DeepMind announced Gemini 3, featuring improved multi-step reasoning, longer context windows (up to 1M tokens), and native tool use capabilities. Canadian developers can access the API through Google Cloud with regional data residency options.",
+            "source": "Google DeepMind"
+        }
+    ],
+    "deep_dives": [
+        {
+            "title": "Measuring AI Ability to Complete Long Tasks - METR Report",
+            "link": "https://arxiv.org/abs/2401.xxxxx",
+            "summary": "This comprehensive report from METR (Model Evaluation and Threat Research) examines how frontier AI models perform on extended tasks requiring sustained reasoning. The findings suggest current models struggle with tasks exceeding 4 hours of human-equivalent work, but improvements are accelerating rapidly.",
+            "source": "arXiv"
+        }
+    ],
+    "grain_quality": [
+        {
+            "title": "Hyperspectral Imaging Detects Mycotoxins in Canadian Wheat Exports",
+            "link": "https://example.com/grain-mycotoxin",
+            "summary": "Researchers at the University of Saskatchewan have demonstrated that hyperspectral imaging combined with machine learning can detect mycotoxin contamination in wheat with 92% accuracy, potentially reducing grading disputes at export terminals and securing Canada's reputation for high-quality grain.",
+            "source": "Journal of Food Composition and Analysis"
+        },
+        {
+            "title": "Ground Truth Ag Launches Benchtop MVNIRs for Grain Grading",
+            "link": "https://groundtruth.ag/benchtop-mvnirs",
+            "summary": "Saskatchewan-based Ground Truth Ag has launched a new benchtop near-infrared spectroscopy system designed for automated grain grading. The system promises to deliver accurate, rapid grain quality assessments that could transform on-farm and elevator decision-making.",
+            "source": "Ground Truth Ag"
+        }
+    ],
+    "learning": [
+        {
+            "title": "Apolitical AI Skills Lab - January 2026",
+            "link": "https://apolitical.co/ai-skills-lab",
+            "summary": "Free online workshop on AI governance for public servants. January 15-16, 2026. Registration open.",
+            "source": "Apolitical"
+        }
+    ],
+    "theme_of_week": {
+        "title": "The Rise of Sovereign AI Infrastructure",
+        "content": "This week's news reveals a clear pattern: governments worldwide are racing to establish sovereign AI capabilities. From Canada's electoral oversight modernization to the EU's implementation timeline, we're seeing a fundamental shift from laissez-faire to strategic governance. For Canadian professionals, this signals both opportunity and urgency—the window for shaping these frameworks is narrowing rapidly.",
+        "enabled": true
+    }
+}
