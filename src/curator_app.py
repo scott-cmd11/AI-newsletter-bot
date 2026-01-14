@@ -35,6 +35,9 @@ from src.templates.kanban_template import KANBAN_TEMPLATE
 # Import rate limiter for AI endpoints
 from src.rate_limiter import rate_limit
 
+# Import security dashboard
+from src.security_dashboard import register_security_routes
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -1467,6 +1470,9 @@ def open_browser():
 
 
 if __name__ == '__main__':
+    # Register security dashboard routes
+    register_security_routes(app)
+    
     print("\n" + "=" * 50)
     print("🤖 Newsletter Curator")
     print("=" * 50)
