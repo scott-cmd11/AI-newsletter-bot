@@ -127,3 +127,12 @@ If you have security concerns:
 ---
 
 **Bottom Line:** Your code is secure. The API key will be safe on Vercel. 🔒
+
+## Security Headers ✅
+
+The application includes standard security headers to protect users:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: SAMEORIGIN`
+- `X-XSS-Protection: 1; mode=block`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Content-Security-Policy` (configured for current architecture)
