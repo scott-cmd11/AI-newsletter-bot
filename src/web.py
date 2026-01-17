@@ -56,6 +56,24 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    # CSP: Allow inline scripts/styles (unsafe-inline) as required by current templates
+    # In a future refactor, move scripts/styles to external files to enable stricter CSP
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self' https:;"
+    )
+    return response
+
 # Paths
 BASE_DIR = Path(__file__).parent.parent
 OUTPUT_DIR = BASE_DIR / "output"
