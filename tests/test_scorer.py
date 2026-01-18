@@ -41,27 +41,25 @@ class TestScoringFunctions(unittest.TestCase):
             category="news"
         )
 
+        # Updated config format to match src/processors/scorer.py expectations (dict of category -> config)
         self.config = {
-            'topics': [
-                {
-                    'name': 'AGI',
-                    'keywords': ['AGI', 'artificial general intelligence', 'breakthrough'],
-                    'category': 'capabilities',
-                    'priority': 2.0
-                },
-                {
-                    'name': 'Governance',
-                    'keywords': ['regulation', 'governance', 'policy'],
-                    'category': 'governance',
-                    'priority': 1.5
-                }
-            ]
+            'capabilities': {
+                'name': 'AGI',
+                'keywords': ['AGI', 'artificial general intelligence', 'breakthrough'],
+                'priority_boost': 2.0
+            },
+            'governance': {
+                'name': 'Governance',
+                'keywords': ['regulation', 'governance', 'policy'],
+                'priority_boost': 1.5
+            }
         }
 
     def test_topic_score_matches_keywords(self):
         """Test that topic score increases for keyword matches."""
-        score = calculate_topic_score(self.article_recent, self.config)
+        score, category = calculate_topic_score(self.article_recent, self.config)
         self.assertGreater(score, 0, "Article with matching keywords should have positive score")
+        self.assertEqual(category, "capabilities")
 
     def test_topic_score_no_match(self):
         """Test that articles without matching keywords get score 0."""
@@ -73,13 +71,15 @@ class TestScoringFunctions(unittest.TestCase):
             summary="No relevant keywords here",
             category="other"
         )
-        score = calculate_topic_score(article, self.config)
+        score, category = calculate_topic_score(article, self.config)
         self.assertEqual(score, 0, "Article without keywords should have zero topic score")
+        self.assertEqual(category, "")
 
     def test_recency_score_recent_article(self):
         """Test that recent articles get higher recency scores."""
-        score_recent = calculate_recency_score(self.article_recent, days_old=0)
-        score_old = calculate_recency_score(self.article_old, days_old=10)
+        # calculate_recency_score does not take days_old argument
+        score_recent = calculate_recency_score(self.article_recent)
+        score_old = calculate_recency_score(self.article_old)
         self.assertGreater(score_recent, score_old, "Recent articles should score higher")
 
     def test_priority_score_high_priority(self):
@@ -141,21 +141,20 @@ class TestArticleScoring(unittest.TestCase):
             ),
         ]
 
+        # Updated config format for full pipeline test
         self.config = {
-            'topics': [
-                {
+            'topics': {
+                'capabilities': {
                     'name': 'AGI',
                     'keywords': ['AGI', 'breakthrough'],
-                    'category': 'capabilities',
-                    'priority': 2.0
+                    'priority_boost': 2.0
                 },
-                {
+                'governance': {
                     'name': 'Governance',
                     'keywords': ['regulation', 'governance'],
-                    'category': 'governance',
-                    'priority': 1.5
+                    'priority_boost': 1.5
                 }
-            ],
+            },
             'canadian_boost': 1.0
         }
 
@@ -211,9 +210,9 @@ class TestScorerEdgeCases(unittest.TestCase):
             published=datetime.now(),
             summary="Summary"
         )
-        config = {'topics': []}
+        config = {'topics': {}}
         # Should not raise an error
-        score = calculate_topic_score(article, config)
+        score, category = calculate_topic_score(article, config)
         self.assertIsNotNone(score)
 
     def test_article_with_no_summary(self):
@@ -225,14 +224,14 @@ class TestScorerEdgeCases(unittest.TestCase):
             published=datetime.now(),
             summary=""
         )
-        config = {'topics': []}
-        score = calculate_topic_score(article, config)
+        config = {'topics': {}}
+        score, category = calculate_topic_score(article, config)
         self.assertIsNotNone(score)
 
     def test_empty_articles_list(self):
         """Test scoring with empty article list."""
         articles = []
-        config = {'topics': []}
+        config = {'topics': {}}
         scored = score_articles(articles, config)
         self.assertEqual(len(scored), 0)
 
@@ -247,7 +246,7 @@ class TestScorerEdgeCases(unittest.TestCase):
                 summary="Test"
             )
         ]
-        config = {'topics': []}
+        config = {'topics': {}}
         scored = score_articles(articles, config)
         self.assertEqual(len(scored), 1)
         # Should still have some score (from priority/recency)
