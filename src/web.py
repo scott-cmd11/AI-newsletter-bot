@@ -9,12 +9,13 @@ import os
 import json
 import logging
 import webbrowser
+import secrets
 from datetime import datetime
 from pathlib import Path
 from threading import Timer
 from functools import wraps
 
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response, session, abort
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,24 @@ from sources.rss_fetcher import Article
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+
+# CSRF Protection
+def generate_csrf_token():
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(32)
+    return session['_csrf_token']
+
+app.jinja_env.globals['csrf_token'] = generate_csrf_token
+
+@app.before_request
+def csrf_protect():
+    if request.method == "POST":
+        token = session.get('_csrf_token')
+        # Check in form data or headers
+        request_token = request.form.get('_csrf_token') or request.headers.get('X-CSRFToken')
+
+        if not token or token != request_token:
+            abort(403, description="CSRF token missing or incorrect")
 
 # Password protection - set AUTH_PASSWORD env var in Railway
 AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')
