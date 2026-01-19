@@ -68,6 +68,14 @@ Your `AUTH_PASSWORD` is:
 - ✅ Never logged (removed from health endpoint)
 - ✅ Only needed to access /fetch, /save, /generate routes
 
+## CSRF Protection ✅
+
+Cross-Site Request Forgery (CSRF) protection is enabled:
+- ✅ Uses Synchronizer Token Pattern
+- ✅ Tokens generated per session using `secrets` module
+- ✅ Enforced on all POST requests
+- ✅ Tokens injected into templates and verified on submission
+
 ### If Password Leaked
 If someone gets your password:
 1. Go to Vercel Dashboard
