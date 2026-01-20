@@ -175,6 +175,7 @@
             gap: 15px;
             align-items: flex-start;
             transition: all 0.2s;
+            cursor: pointer;
         }
         .article:hover {
             background: #2a2a50;
@@ -328,12 +329,13 @@
                 </div>
                 <div class="articles">
                     {% for article in articles[:10] %}
-                    <div class="article {% if article.selected %}selected{% endif %}" data-score="{{ article.score }}">
+                    <div class="article {% if article.selected %}selected{% endif %}" data-score="{{ article.score }}" onclick="toggleArticle(event, this)">
                         <input type="checkbox"
                                name="selected"
                                value="{{ cat_name }}:{{ article.id }}"
                                {% if article.selected %}checked{% endif %}
-                               onchange="updateCount()">
+                               onchange="updateCount()"
+                               aria-label="Select {{ article.title|e }}">
                         <div class="article-content">
                             <div class="article-title">
                                 <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
@@ -365,6 +367,16 @@
     </div>
 
     <script>
+        function toggleArticle(event, element) {
+            // Don't toggle if clicking link or checkbox itself (checkbox handles its own toggle)
+            if (event.target.closest('a') || event.target.tagName === 'INPUT') {
+                return;
+            }
+            const checkbox = element.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            updateCount();
+        }
+
         function updateCount() {
             const checked = document.querySelectorAll('input[name="selected"]:checked').length;
             document.getElementById('selected-count').textContent = checked;
