@@ -29,6 +29,31 @@ from sources.rss_fetcher import Article
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
 
+# CSRF Protection
+import secrets
+from flask import session, abort
+
+def generate_csrf_token():
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(16)
+    return session['_csrf_token']
+
+app.jinja_env.globals['csrf_token'] = generate_csrf_token
+
+@app.before_request
+def csrf_protect():
+    if request.method == "POST":
+        token = session.get('_csrf_token')
+        if not token:
+            app.logger.warning("CSRF attempt: No token in session")
+            abort(403)
+
+        request_token = request.form.get('csrf_token') or request.headers.get('X-CSRFToken')
+
+        if not request_token or not secrets.compare_digest(token, request_token):
+            app.logger.warning("CSRF attempt: Invalid token")
+            abort(403)
+
 # Password protection - set AUTH_PASSWORD env var in Railway
 AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')
 
@@ -385,6 +410,7 @@ _ORIGINAL_TEMPLATE = '''
         </div>
 
         <form id="article-form" method="POST" action="{{ url_for('save_selection') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             {% for cat_name, articles in data.categories.items() %}
             <div class="category">
                 <div class="category-header">
