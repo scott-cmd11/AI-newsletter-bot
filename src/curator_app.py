@@ -26,8 +26,9 @@ try:
 except ImportError:
     pass  # dotenv not installed, use system env vars
 
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, Response, session, abort
 from functools import wraps
+import secrets
 
 # Import Kanban template
 from src.templates.kanban_template import KANBAN_TEMPLATE
@@ -44,6 +45,24 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
+
+@app.before_request
+def csrf_protection():
+    if not session.get('csrf_token'):
+        session['csrf_token'] = secrets.token_hex(32)
+
+    if request.method == "POST":
+        token = session.get('csrf_token')
+        submitted_token = request.form.get('csrf_token') or \
+                          request.headers.get('X-CSRFToken') or \
+                          (request.is_json and request.json and request.json.get('csrf_token'))
+
+        if not token or token != submitted_token:
+            abort(403)
+
+@app.context_processor
+def inject_csrf_token():
+    return dict(csrf_token=session.get('csrf_token'))
 
 # Password protection - set AUTH_PASSWORD env var for cloud deployment
 AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')

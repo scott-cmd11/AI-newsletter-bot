@@ -8,6 +8,7 @@ KANBAN_TEMPLATE = '''
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Newsletter Curator</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
@@ -701,7 +702,10 @@ KANBAN_TEMPLATE = '''
             
             fetch('/score', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'}
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                }
             })
             .then(r => r.json())
             .then(data => {
@@ -786,7 +790,10 @@ KANBAN_TEMPLATE = '''
             
             fetch('/generate-theme', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                },
                 body: JSON.stringify({article_indices: selected})
             })
             .then(r => r.json())
@@ -813,7 +820,10 @@ KANBAN_TEMPLATE = '''
             
             fetch('/generate', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                },
                 body: JSON.stringify({assignments: assignments, theme: theme})
             })
             .then(r => r.json())
@@ -843,7 +853,10 @@ KANBAN_TEMPLATE = '''
                     
                     const scoreResponse = await fetch('/score', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'}
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                        }
                     });
                     const scoreData = await scoreResponse.json();
                     
@@ -863,7 +876,10 @@ KANBAN_TEMPLATE = '''
                     
                     const themeResponse = await fetch('/generate-theme', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                        },
                         body: JSON.stringify({article_indices: Object.values(assignments).flat()})
                     });
                     const themeData = await themeResponse.json();

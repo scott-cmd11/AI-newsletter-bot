@@ -14,7 +14,8 @@ from pathlib import Path
 from threading import Timer
 from functools import wraps
 
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response, session, abort
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,24 @@ from sources.rss_fetcher import Article
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
+
+@app.before_request
+def csrf_protection():
+    if not session.get('csrf_token'):
+        session['csrf_token'] = secrets.token_hex(32)
+
+    if request.method == "POST":
+        token = session.get('csrf_token')
+        submitted_token = request.form.get('csrf_token') or \
+                          request.headers.get('X-CSRFToken') or \
+                          (request.is_json and request.json and request.json.get('csrf_token'))
+
+        if not token or token != submitted_token:
+            abort(403)
+
+@app.context_processor
+def inject_csrf_token():
+    return dict(csrf_token=session.get('csrf_token'))
 
 # Password protection - set AUTH_PASSWORD env var in Railway
 AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')
