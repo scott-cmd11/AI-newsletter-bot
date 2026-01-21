@@ -328,12 +328,17 @@
                 </div>
                 <div class="articles">
                     {% for article in articles[:10] %}
-                    <div class="article {% if article.selected %}selected{% endif %}" data-score="{{ article.score }}">
+                    <div class="article {% if article.selected %}selected{% endif %}"
+                         data-score="{{ article.score }}"
+                         onclick="toggleArticle(event, this)"
+                         style="cursor: pointer;">
                         <input type="checkbox"
                                name="selected"
                                value="{{ cat_name }}:{{ article.id }}"
+                               aria-label="Select {{ article.title }}"
                                {% if article.selected %}checked{% endif %}
-                               onchange="updateCount()">
+                               onchange="updateCount()"
+                               onclick="event.stopPropagation()">
                         <div class="article-content">
                             <div class="article-title">
                                 <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
@@ -365,6 +370,15 @@
     </div>
 
     <script>
+        function toggleArticle(event, element) {
+            // Prevent toggling when clicking on links
+            if (event.target.closest('a')) return;
+
+            const checkbox = element.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            updateCount();
+        }
+
         function updateCount() {
             const checked = document.querySelectorAll('input[name="selected"]:checked').length;
             document.getElementById('selected-count').textContent = checked;
