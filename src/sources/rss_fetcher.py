@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 import re
 import sys
+import concurrent.futures
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,54 @@ def clean_html(text: str) -> str:
     return clean.strip()
 
 
+def _fetch_single_google_alert(alert: dict, cutoff_date: datetime) -> List[Article]:
+    """Helper to fetch a single Google Alert feed."""
+    articles = []
+    url = alert.get('url', '')
+    if not url:
+        logger.warning(f"Skipping '{alert.get('name', 'Unknown')}' - no URL configured")
+        print(f"  ⚠️  Skipping '{alert.get('name', 'Unknown')}' - no URL configured")
+        return []
+
+    alert_name = alert.get('name', url[:50])
+    print(f"  📡 Fetching: {alert_name}")
+    logger.debug(f"Fetching Google Alert: {alert_name}")
+
+    try:
+        feed = feedparser.parse(url)
+
+        if feed.bozo and not feed.entries:
+            logger.warning(f"Error parsing feed {alert_name}: {feed.bozo_exception}")
+            print(f"    ⚠️  Error parsing feed: {feed.bozo_exception}")
+            return []
+
+        for entry in feed.entries:
+            pub_date = parse_date(entry)
+
+            # Skip old articles
+            if pub_date and pub_date < cutoff_date:
+                continue
+
+            article = Article(
+                title=clean_html(entry.get('title', 'No title')),
+                url=entry.get('link', ''),
+                source=alert.get('name', 'Google Alerts'),
+                published=pub_date,
+                summary=clean_html(entry.get('summary', '')),
+                priority=alert.get('priority', 'medium')
+            )
+            articles.append(article)
+
+        print(f"    ✓ Found {len(feed.entries)} entries")
+        logger.debug(f"Found {len(feed.entries)} entries in {alert_name}")
+
+    except Exception as e:
+        logger.error(f"Error fetching Google Alert {alert_name}: {e}")
+        print(f"    ❌ Error: {e}")
+
+    return articles
+
+
 def fetch_google_alerts(alerts_config: List[dict], max_age_days: int = 7) -> List[Article]:
     """
     Fetch articles from Google Alerts RSS feeds.
@@ -121,52 +170,73 @@ def fetch_google_alerts(alerts_config: List[dict], max_age_days: int = 7) -> Lis
     Returns:
         List of Article objects
     """
-    articles = []
     cutoff_date = datetime.now() - timedelta(days=max_age_days)
+    all_articles = []
     
-    for alert in alerts_config:
-        url = alert.get('url', '')
-        if not url:
-            logger.warning(f"Skipping '{alert.get('name', 'Unknown')}' - no URL configured")
-            print(f"  ⚠️  Skipping '{alert.get('name', 'Unknown')}' - no URL configured")
-            continue
+    # Use ThreadPoolExecutor for parallel fetching
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_alert = {
+            executor.submit(_fetch_single_google_alert, alert, cutoff_date): alert
+            for alert in alerts_config
+        }
+        for future in concurrent.futures.as_completed(future_to_alert):
+            try:
+                articles = future.result()
+                all_articles.extend(articles)
+            except Exception as e:
+                alert = future_to_alert[future]
+                alert_name = alert.get('name', 'Unknown')
+                logger.error(f"Exception fetching {alert_name}: {e}")
 
-        alert_name = alert.get('name', url[:50])
-        print(f"  📡 Fetching: {alert_name}")
-        logger.debug(f"Fetching Google Alert: {alert_name}")
+    return all_articles
 
-        try:
-            feed = feedparser.parse(url)
 
-            if feed.bozo and not feed.entries:
-                logger.warning(f"Error parsing feed {alert_name}: {feed.bozo_exception}")
-                print(f"    ⚠️  Error parsing feed: {feed.bozo_exception}")
+def _fetch_single_rss_feed(feed_config: dict, cutoff_date: datetime) -> List[Article]:
+    """Helper to fetch a single RSS feed."""
+    articles = []
+    url = feed_config.get('url', '')
+    if not url:
+        logger.warning(f"RSS feed config missing URL: {feed_config.get('name', 'Unknown')}")
+        return []
+
+    feed_name = feed_config.get('name', url[:50])
+    print(f"  📡 Fetching: {feed_name}")
+    logger.debug(f"Fetching RSS feed: {feed_name}")
+
+    try:
+        feed = feedparser.parse(url)
+
+        if feed.bozo and not feed.entries:
+            logger.warning(f"Error parsing RSS feed {feed_name}: {feed.bozo_exception}")
+            print(f"    ⚠️  Warning: {feed.bozo_exception}")
+            return []
+
+        count = 0
+        for entry in feed.entries:
+            pub_date = parse_date(entry)
+
+            if pub_date and pub_date < cutoff_date:
                 continue
 
-            for entry in feed.entries:
-                pub_date = parse_date(entry)
+            article = Article(
+                title=clean_html(entry.get('title', 'No title')),
+                url=entry.get('link', ''),
+                source=feed_config.get('name', 'RSS Feed'),
+                published=pub_date,
+                summary=clean_html(entry.get('summary', entry.get('description', ''))),
+                category=feed_config.get('category', ''),
+                priority=feed_config.get('priority', 'medium')
+            )
+            articles.append(article)
+            count += 1
 
-                # Skip old articles
-                if pub_date and pub_date < cutoff_date:
-                    continue
+        print(f"    ✓ Found {count} recent articles")
+        logger.debug(f"Found {count} recent articles in {feed_name}")
 
-                article = Article(
-                    title=clean_html(entry.get('title', 'No title')),
-                    url=entry.get('link', ''),
-                    source=alert.get('name', 'Google Alerts'),
-                    published=pub_date,
-                    summary=clean_html(entry.get('summary', '')),
-                    priority=alert.get('priority', 'medium')
-                )
-                articles.append(article)
+    except Exception as e:
+        logger.error(f"Error fetching RSS feed {feed_name}: {e}")
+        print(f"    ❌ Error: {e}")
 
-            print(f"    ✓ Found {len(feed.entries)} entries")
-            logger.debug(f"Found {len(feed.entries)} entries in {alert_name}")
-
-        except Exception as e:
-            logger.error(f"Error fetching Google Alert {alert_name}: {e}")
-            print(f"    ❌ Error: {e}")
-            
     return articles
 
 
@@ -181,54 +251,25 @@ def fetch_rss_feeds(feeds_config: List[dict], max_age_days: int = 7) -> List[Art
     Returns:
         List of Article objects
     """
-    articles = []
     cutoff_date = datetime.now() - timedelta(days=max_age_days)
+    all_articles = []
     
-    for feed_config in feeds_config:
-        url = feed_config.get('url', '')
-        if not url:
-            logger.warning(f"RSS feed config missing URL: {feed_config.get('name', 'Unknown')}")
-            continue
-
-        feed_name = feed_config.get('name', url[:50])
-        print(f"  📡 Fetching: {feed_name}")
-        logger.debug(f"Fetching RSS feed: {feed_name}")
-
-        try:
-            feed = feedparser.parse(url)
-
-            if feed.bozo and not feed.entries:
-                logger.warning(f"Error parsing RSS feed {feed_name}: {feed.bozo_exception}")
-                print(f"    ⚠️  Warning: {feed.bozo_exception}")
-                continue
-
-            count = 0
-            for entry in feed.entries:
-                pub_date = parse_date(entry)
-
-                if pub_date and pub_date < cutoff_date:
-                    continue
-
-                article = Article(
-                    title=clean_html(entry.get('title', 'No title')),
-                    url=entry.get('link', ''),
-                    source=feed_config.get('name', 'RSS Feed'),
-                    published=pub_date,
-                    summary=clean_html(entry.get('summary', entry.get('description', ''))),
-                    category=feed_config.get('category', ''),
-                    priority=feed_config.get('priority', 'medium')
-                )
-                articles.append(article)
-                count += 1
-
-            print(f"    ✓ Found {count} recent articles")
-            logger.debug(f"Found {count} recent articles in {feed_name}")
-
-        except Exception as e:
-            logger.error(f"Error fetching RSS feed {feed_name}: {e}")
-            print(f"    ❌ Error: {e}")
+    # Use ThreadPoolExecutor for parallel fetching
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_feed = {
+            executor.submit(_fetch_single_rss_feed, feed_config, cutoff_date): feed_config
+            for feed_config in feeds_config
+        }
+        for future in concurrent.futures.as_completed(future_to_feed):
+            try:
+                articles = future.result()
+                all_articles.extend(articles)
+            except Exception as e:
+                feed = future_to_feed[future]
+                feed_name = feed.get('name', 'Unknown')
+                logger.error(f"Exception fetching {feed_name}: {e}")
             
-    return articles
+    return all_articles
 
 
 def fetch_all_articles(config: dict, use_cache: bool = True) -> List[Article]:
