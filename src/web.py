@@ -14,7 +14,8 @@ from pathlib import Path
 from threading import Timer
 from functools import wraps
 
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response
+import secrets
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response, session, abort
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,25 @@ def load_html_template() -> str:
 
 # Load HTML Template at module level
 HTML_TEMPLATE = load_html_template()
+
+def generate_csrf_token():
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+    return session['csrf_token']
+
+app.jinja_env.globals['csrf_token'] = generate_csrf_token
+
+@app.before_request
+def csrf_protect():
+    if request.method == "POST":
+        token = session.get('csrf_token')
+        if not token:
+            abort(403)
+        if request.form.get('csrf_token') == token:
+            return
+        if request.headers.get('X-CSRFToken') == token:
+            return
+        abort(403)
 
 # Original inline template kept for reference during migration
 _ORIGINAL_TEMPLATE = '''
