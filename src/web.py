@@ -9,12 +9,13 @@ import os
 import json
 import logging
 import webbrowser
+import secrets
 from datetime import datetime
 from pathlib import Path
 from threading import Timer
 from functools import wraps
 
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response, session, abort
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,33 @@ def requires_auth(f):
                 return authenticate()
         return f(*args, **kwargs)
     return decorated
+
+
+def generate_csrf_token():
+    """Generate and store CSRF token in session."""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+    return session['csrf_token']
+
+
+def check_csrf_token():
+    """Verify CSRF token for unsafe methods."""
+    if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
+        token = session.get('csrf_token')
+        if not token:
+            logger.warning("CSRF attempt: No token in session")
+            abort(403)
+
+        request_token = request.form.get('csrf_token') or request.headers.get('X-CSRFToken')
+
+        if not request_token or request_token != token:
+            logger.warning("CSRF attempt: Invalid or missing token")
+            abort(403)
+
+
+# Register CSRF protection
+app.jinja_env.globals['csrf_token'] = generate_csrf_token
+app.before_request(check_csrf_token)
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
