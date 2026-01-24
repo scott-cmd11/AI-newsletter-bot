@@ -504,6 +504,141 @@ Respond in JSON:
 # VIBECODING FRAMEWORK: The Editor Agent (YODA Filter)
 # ============================================================================
 
+def _process_single_item(item: dict, section: str, config: dict) -> dict:
+    """
+    Process a single item to generate its AI summary.
+    This encapsulates the logic previously inside the loop.
+    """
+    # Create a minimal Article-like object for the prompt builder
+    article = type('Article', (), {
+        'title': item.get('title', ''),
+        'url': item.get('link', ''),
+        'summary': item.get('summary', ''),
+        'source': item.get('source', ''),
+        'category': section
+    })()
+
+    # Map section names for prompt
+    prompt_section = section.rstrip('s')
+    if prompt_section == 'headline':
+        prompt_section = 'headline'
+    elif prompt_section == 'grain_qualit':
+        prompt_section = 'grain_quality'
+
+    # Generate AI summary
+    ai_summary = item.get('summary', '')
+    try:
+        prompt = build_scott_voice_prompt(article, prompt_section, config)
+        model_name = config.get('gemini', {}).get('model', 'models/gemini-2.0-flash')
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(prompt)
+
+        if response.text:
+            ai_summary = response.text.strip()
+    except Exception as e:
+        logger.warning(f"AI summary failed for '{item.get('title', '')[:30]}...': {e}")
+
+    return {
+        'title': item.get('title', ''),
+        'link': item.get('link', ''),
+        'summary': ai_summary,
+        'source': item.get('source', ''),
+    }
+
+
+async def _process_single_item_async(item: dict, section: str, config: dict, semaphore: asyncio.Semaphore = None) -> dict:
+    """
+    Async wrapper for _process_single_item.
+    """
+    loop = asyncio.get_running_loop()
+
+    async def run():
+        return await loop.run_in_executor(None, _process_single_item, item, section, config)
+
+    if semaphore:
+        async with semaphore:
+            return await run()
+    else:
+        return await run()
+
+
+async def _generate_curated_report_async(categorized: dict, section_limits: dict, config: dict) -> dict:
+    """
+    Async implementation of the Level 3 (Expansion) phase.
+    """
+    tasks = []
+    # Using a semaphore to prevent hitting API rate limits
+    # Defaulting to 10 concurrent requests
+    semaphore = asyncio.Semaphore(10)
+
+    # We need to keep track of which section each task belongs to
+    # so we can reconstruct the curated dictionary
+    task_metadata = []
+
+    for section, items in categorized.items():
+        limit = section_limits.get(section, 3)
+        selected = items[:limit]
+
+        if not selected:
+            continue
+
+        logger.info(f"   Processing {len(selected)} {section}...")
+
+        for item in selected:
+            tasks.append(_process_single_item_async(item, section, config, semaphore))
+            task_metadata.append(section)
+
+    # Run all tasks concurrently
+    results = []
+    if tasks:
+        logger.info(f"   Executing {len(tasks)} summarization tasks in parallel...")
+        results = await asyncio.gather(*tasks)
+
+    # Reconstruct the curated dictionary
+    curated = {
+        'headlines': [],
+        'bright_spots': [],
+        'tools': [],
+        'deep_dives': [],
+        'grain_quality': [],
+        'learning': [],
+        'theme_of_week': None
+    }
+
+    for section, result in zip(task_metadata, results):
+        curated[section].append(result)
+
+    return curated
+
+
+def _generate_curated_report_sequential(categorized: dict, section_limits: dict, config: dict) -> dict:
+    """Sequential fallback for generating curated report."""
+    curated = {
+        'headlines': [],
+        'bright_spots': [],
+        'tools': [],
+        'deep_dives': [],
+        'grain_quality': [],
+        'learning': [],
+        'theme_of_week': None
+    }
+
+    for section, items in categorized.items():
+        limit = section_limits.get(section, 3)
+        selected = items[:limit]
+
+        if not selected:
+            continue
+
+        logger.info(f"   Processing {len(selected)} {section} (sequential)...")
+
+        for item in selected:
+            res = _process_single_item(item, section, config)
+            curated[section].append(res)
+
+    return curated
+
+
 def generate_curated_report(raw_intel_path: Path = None, output_path: Path = None, config: dict = None) -> dict:
     """
     The Editor Agent: Apply the Socratic YODA filter to raw intelligence.
@@ -600,17 +735,6 @@ def generate_curated_report(raw_intel_path: Path = None, output_path: Path = Non
     # ========== LEVEL 3: EXPANSION (Synthesis) ==========
     logger.info("✨ Level 3 (Expansion): Generating AI summaries...")
     
-    curated = {
-        'headlines': [],
-        'bright_spots': [],
-        'tools': [],
-        'deep_dives': [],
-        'grain_quality': [],
-        'learning': [],
-        'theme_of_week': None
-    }
-    
-    # Process each section with AI summaries
     section_limits = {
         'headlines': 8,
         'bright_spots': 2,
@@ -620,50 +744,27 @@ def generate_curated_report(raw_intel_path: Path = None, output_path: Path = Non
         'learning': 3
     }
     
-    for section, items in categorized.items():
-        limit = section_limits.get(section, 3)
-        selected = items[:limit]
-        
-        if not selected:
-            continue
-            
-        logger.info(f"   Processing {len(selected)} {section}...")
-        
-        for item in selected:
-            # Create a minimal Article-like object for the prompt builder
-            article = type('Article', (), {
-                'title': item.get('title', ''),
-                'url': item.get('link', ''),
-                'summary': item.get('summary', ''),
-                'source': item.get('source', ''),
-                'category': section
-            })()
-            
-            # Map section names for prompt
-            prompt_section = section.rstrip('s')
-            if prompt_section == 'headline':
-                prompt_section = 'headline'
-            elif prompt_section == 'grain_qualit':
-                prompt_section = 'grain_quality'
-            
-            # Generate AI summary
+    # Run async summarization
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             try:
-                prompt = build_scott_voice_prompt(article, prompt_section, config)
-                model_name = config.get('gemini', {}).get('model', 'models/gemini-2.0-flash')
-                model = genai.GenerativeModel(model_name)
-                response = model.generate_content(prompt)
-                
-                ai_summary = response.text.strip() if response.text else item.get('summary', '')
-            except Exception as e:
-                logger.warning(f"AI summary failed for '{item.get('title', '')[:30]}...': {e}")
-                ai_summary = item.get('summary', '')
-            
-            curated[section].append({
-                'title': item.get('title', ''),
-                'link': item.get('link', ''),
-                'summary': ai_summary,
-                'source': item.get('source', ''),
-            })
+                curated = loop.run_until_complete(
+                    _generate_curated_report_async(categorized, section_limits, config)
+                )
+            finally:
+                loop.close()
+        else:
+            logger.warning("Event loop already running, falling back to sequential execution.")
+            curated = _generate_curated_report_sequential(categorized, section_limits, config)
+
+    except Exception as e:
+        logger.error(f"Async summarization failed: {e}")
+        # Fallback to sequential
+        curated = _generate_curated_report_sequential(categorized, section_limits, config)
     
     # Generate Theme of the Week
     logger.info("   Generating Theme of the Week...")
