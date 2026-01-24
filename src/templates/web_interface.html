@@ -412,6 +412,7 @@
 
         // Progress tracking
         let progressInterval = null;
+        let wasFetching = false;
 
         function showProgress() {
             const container = document.getElementById('progress-container');
@@ -444,16 +445,39 @@
                     if (data.status === 'complete' || data.status === 'error') {
                         clearInterval(progressInterval);
                         hideProgress();
+
+                        // Reload if we were tracking a fetch and it completed successfully
+                        if (wasFetching && data.status === 'complete') {
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1000);
+                        }
                     }
                 })
                 .catch(err => console.error('Progress update error:', err));
         }
+
+        // Check status on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('{{ url_for("get_progress") }}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'fetching') {
+                        showProgress();
+                        wasFetching = true;
+                        progressInterval = setInterval(updateProgressBar, 300);
+                        updateProgressBar();
+                    }
+                })
+                .catch(err => console.error('Error checking progress:', err));
+        });
 
         // Override fetch link to show progress
         document.querySelectorAll('a[href*="/fetch"]').forEach(link => {
             link.addEventListener('click', function(e) {
                 // Show progress immediately
                 showProgress();
+                wasFetching = true;
                 // Start polling every 300ms
                 progressInterval = setInterval(updateProgressBar, 300);
                 // Make first update immediately
