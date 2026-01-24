@@ -172,6 +172,51 @@ class TestConfigLoader(unittest.TestCase):
         finally:
             Path(temp_path).unlink()
 
+    def test_legacy_topics_dict_conversion(self):
+        """Test that legacy topics dictionary format is converted to list."""
+        config_dict = {
+            'newsletter': {'name': 'Test'},
+            'topics': {
+                'AI': {
+                    'keywords': ['artificial intelligence', 'ml'],
+                    'category': 'Tech',
+                    'priority_boost': 1.5
+                },
+                'Space': {
+                    'keywords': ['nasa', 'spacex']
+                    # Missing category, should default to name
+                    # Missing priority_boost, should default to 1.0
+                }
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+            yaml.dump(config_dict, f)
+            temp_path = f.name
+
+        try:
+            config = load_config(temp_path)
+            topics = config['topics']
+
+            # Check if converted to list
+            self.assertIsInstance(topics, list)
+            self.assertEqual(len(topics), 2)
+
+            # Find AI topic - checking dictionaries
+            ai_topic = next(t for t in topics if t['name'] == 'AI')
+            self.assertEqual(ai_topic['keywords'], ['artificial intelligence', 'ml'])
+            self.assertEqual(ai_topic['category'], 'Tech')
+            self.assertEqual(ai_topic['priority'], 1.5)
+
+            # Find Space topic
+            space_topic = next(t for t in topics if t['name'] == 'Space')
+            self.assertEqual(space_topic['keywords'], ['nasa', 'spacex'])
+            self.assertEqual(space_topic['category'], 'Space')
+            self.assertEqual(space_topic['priority'], 1.0)
+
+        finally:
+            Path(temp_path).unlink()
+
 
 class TestConfigModel(unittest.TestCase):
     """Test Pydantic config models."""
