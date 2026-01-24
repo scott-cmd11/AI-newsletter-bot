@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import Timer
 from functools import wraps
+import concurrent.futures
 
 from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response
 
@@ -65,6 +66,9 @@ _config = None
 _review_service = None
 _article_service = None
 _newsletter_service = None
+
+# Thread executor for background tasks
+_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
 # Progress tracking for fetch operations
 _fetch_progress = {
@@ -568,12 +572,9 @@ def get_progress():
     return jsonify(_fetch_progress)
 
 
-@app.route('/fetch')
-@requires_auth
-def fetch_articles():
-    """Fetch and score new articles."""
+def run_fetch_worker():
+    """Background worker to fetch articles."""
     try:
-        logger.info("Fetch articles request")
         update_progress("fetching", "Fetching articles from sources...", 10)
         review_service = get_review_service()
 
@@ -583,12 +584,34 @@ def fetch_articles():
         if not review_data or not review_data.get('categories'):
             logger.warning("No articles available to fetch")
             update_progress("error", "No articles available", 0)
-            return redirect(url_for('index'))
+            return
 
         update_progress("complete", f"Fetched {review_data.get('total_articles', 0)} articles", 100)
         logger.info(f"Fetched {review_data.get('total_articles', 0)} articles")
 
-        # Reset progress after 2 seconds
+    except Exception as e:
+        logger.error(f"Error in fetch worker: {e}")
+        update_progress("error", f"Error: {str(e)}", 0)
+
+
+@app.route('/fetch')
+@requires_auth
+def fetch_articles():
+    """Fetch and score new articles."""
+    try:
+        logger.info("Fetch articles request")
+
+        # Check if already running
+        if _fetch_progress["status"] == "fetching":
+            return redirect(url_for('index'))
+
+        # Initial status
+        update_progress("fetching", "Starting fetch...", 0)
+
+        # Start background task
+        _executor.submit(run_fetch_worker)
+
+        # Redirect immediately
         return redirect(url_for('index'))
 
     except Exception as e:
