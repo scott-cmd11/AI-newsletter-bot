@@ -73,11 +73,168 @@ class PersonalizationService:
         return self._analysis_cached
 
     def clear_cache(self) -> None:
-        """Clear cached preference profile."""
+        """
+        Clear cached preference profile in memory.
+
+        Note: This does not remove the persistent cache file.
+        To force a rebuild, delete the profile_cache.json file manually.
+        """
         self._analysis_cached = False
         self._cache_time = None
         self.preference_profile = PreferenceProfile()
-        logger.debug("Personalization cache cleared")
+        logger.debug("Personalization memory cache cleared")
+
+    def _load_cache(self) -> Optional[Dict[str, Any]]:
+        """Load cached profile stats."""
+        cache_file = self.output_dir / "profile_cache.json"
+        if not cache_file.exists():
+            return None
+
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # Convert dicts back to Counters where appropriate
+            if 'stats' in data:
+                stats = data['stats']
+                if 'source_selections' in stats:
+                    stats['source_selections'] = Counter(stats['source_selections'])
+                if 'category_selections' in stats:
+                    stats['category_selections'] = Counter(stats['category_selections'])
+                if 'all_keywords' in stats:
+                    stats['all_keywords'] = Counter(stats['all_keywords'])
+
+            return data
+        except Exception as e:
+            logger.warning(f"Error reading profile cache: {e}")
+            return None
+
+    def _save_cache(self, processed_files: List[str], stats: Dict[str, Any]) -> None:
+        """Save profile stats to cache."""
+        cache_file = self.output_dir / "profile_cache.json"
+
+        try:
+            data = {
+                'processed_files': processed_files,
+                'stats': stats,
+                'last_updated': datetime.now().isoformat()
+            }
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+        except Exception as e:
+            logger.warning(f"Error saving profile cache: {e}")
+
+    def _process_review_file(self, review_file: Path) -> Optional[Dict[str, Any]]:
+        """
+        Process a single review file to extract stats.
+
+        Args:
+            review_file: Path to the review file
+
+        Returns:
+            Dictionary with extracted stats (counters, lists) or None on error
+        """
+        try:
+            with open(review_file, 'r', encoding='utf-8') as f:
+                review_data = json.load(f)
+        except Exception as e:
+            logger.warning(f"Error reading {review_file}: {e}")
+            return None
+
+        stats = {
+            'selected_count': 0,
+            'available_count': 0,
+            'source_selections': Counter(),
+            'category_selections': Counter(),
+            'all_keywords': Counter(),
+            'scores': []
+        }
+
+        # Get all available articles
+        categories = review_data.get('categories', {})
+        for category, articles in categories.items():
+            if isinstance(articles, list):
+                stats['available_count'] += len(articles)
+
+        # Get selected articles
+        selected = review_data.get('selected', [])
+        if selected:
+            stats['selected_count'] = len(selected)
+
+            # Track selections by source and category
+            for article in selected:
+                source = article.get('source', 'unknown')
+                stats['source_selections'][source] += 1
+
+                category = article.get('category', 'uncategorized')
+                stats['category_selections'][category] += 1
+
+                # Extract keywords from title
+                title = article.get('title', '')
+                keywords = self._extract_keywords(title)
+                stats['all_keywords'].update(keywords)
+
+                score = article.get('score', 0.0)
+                if isinstance(score, (int, float)):
+                    stats['scores'].append(score)
+
+        return stats
+
+    def _build_profile_from_stats(self, stats: Dict[str, Any]) -> PreferenceProfile:
+        """
+        Build PreferenceProfile from aggregated stats.
+
+        Args:
+            stats: Dictionary with aggregated counters and lists
+
+        Returns:
+            PreferenceProfile
+        """
+        profile = PreferenceProfile()
+
+        total_selections = stats.get('total_selections', 0)
+        total_available = stats.get('total_available', 0)
+
+        profile.total_selections = total_selections
+        profile.total_available = total_available
+        profile.selection_rate = (
+            total_selections / total_available if total_available > 0 else 0.0
+        )
+
+        scores_min = stats.get('scores_min')
+        scores_max = stats.get('scores_max')
+
+        if scores_min is not None and scores_max is not None:
+             profile.score_threshold = scores_min
+             profile.score_range = (scores_min, scores_max)
+
+        source_selections = stats.get('source_selections', Counter())
+        if source_selections:
+            max_source_count = max(source_selections.values())
+            for source, count in source_selections.items():
+                # Boost multiplier: 1.0-2.0x based on selection frequency
+                boost = 1.0 + (count / max_source_count)
+                profile.source_preferences[source] = boost
+
+            profile.preferred_sources = [
+                source for source, _ in source_selections.most_common(5)
+            ]
+
+        category_selections = stats.get('category_selections', Counter())
+        if category_selections:
+            max_category_count = max(category_selections.values())
+            for category, count in category_selections.items():
+                boost = 1.0 + (count / max_category_count)
+                profile.category_preferences[category] = boost
+
+            profile.preferred_categories = [
+                cat for cat, _ in category_selections.most_common(5)
+            ]
+
+        all_keywords = stats.get('all_keywords', Counter())
+        profile.keyword_preferences = dict(all_keywords.most_common(20))
+
+        return profile
 
     def analyze_historical_selections(self) -> PreferenceProfile:
         """
@@ -88,98 +245,92 @@ class PersonalizationService:
         """
         try:
             logger.info("Analyzing historical selections")
-            review_files = list(self.output_dir.glob("review_*.json"))
 
+            # Load cache
+            cache_data = self._load_cache()
+            cached_files = set(cache_data['processed_files']) if cache_data else set()
+            aggregated_stats = cache_data['stats'] if cache_data else {
+                'total_selections': 0,
+                'total_available': 0,
+                'source_selections': Counter(),
+                'category_selections': Counter(),
+                'all_keywords': Counter(),
+                'scores_min': None,
+                'scores_max': None
+            }
+
+            review_files = list(self.output_dir.glob("review_*.json"))
             if not review_files:
                 logger.warning("No review files found for analysis")
                 return self.preference_profile
 
-            # Collect all selections and metadata
-            all_selected_articles = []
-            all_available_articles = []
-            source_selections = Counter()
-            category_selections = Counter()
-            all_keywords = Counter()
-            scores = []
+            current_files = {f.name for f in review_files}
+            new_files = [f for f in review_files if f.name not in cached_files]
 
-            for review_file in sorted(review_files):
-                try:
-                    with open(review_file, 'r', encoding='utf-8') as f:
-                        review_data = json.load(f)
-                except Exception as e:
-                    logger.warning(f"Error reading {review_file}: {e}")
+            # Check if any cached file is missing (rebuild if so)
+            missing_files = cached_files - current_files
+            if missing_files:
+                logger.info(f"Found {len(missing_files)} deleted files, rebuilding cache...")
+                # Reset stats and process all files
+                aggregated_stats = {
+                    'total_selections': 0,
+                    'total_available': 0,
+                    'source_selections': Counter(),
+                    'category_selections': Counter(),
+                    'all_keywords': Counter(),
+                    'scores_min': None,
+                    'scores_max': None
+                }
+                new_files = review_files
+                cached_files = set()
+
+            if not new_files and not missing_files:
+                logger.info("Using cached profile stats")
+                self.preference_profile = self._build_profile_from_stats(aggregated_stats)
+                self._analysis_cached = True
+                self._cache_time = datetime.now()
+                return self.preference_profile
+
+            # Process new files
+            logger.info(f"Processing {len(new_files)} new review files")
+
+            new_scores = []
+
+            for review_file in sorted(new_files):
+                file_stats = self._process_review_file(review_file)
+                if not file_stats:
                     continue
 
-                # Get all available articles
-                categories = review_data.get('categories', {})
-                for category, articles in categories.items():
-                    if isinstance(articles, list):
-                        all_available_articles.extend(articles)
+                aggregated_stats['total_selections'] += file_stats['selected_count']
+                aggregated_stats['total_available'] += file_stats['available_count']
+                aggregated_stats['source_selections'].update(file_stats['source_selections'])
+                aggregated_stats['category_selections'].update(file_stats['category_selections'])
+                aggregated_stats['all_keywords'].update(file_stats['all_keywords'])
+                new_scores.extend(file_stats['scores'])
 
-                # Get selected articles
-                selected = review_data.get('selected', [])
-                if selected:
-                    all_selected_articles.extend(selected)
+            if new_scores:
+                current_min = aggregated_stats.get('scores_min')
+                current_max = aggregated_stats.get('scores_max')
 
-                    # Track selections by source and category
-                    for article in selected:
-                        source = article.get('source', 'unknown')
-                        source_selections[source] += 1
+                batch_min = min(new_scores)
+                batch_max = max(new_scores)
 
-                        category = article.get('category', 'uncategorized')
-                        category_selections[category] += 1
+                if current_min is None:
+                    aggregated_stats['scores_min'] = batch_min
+                else:
+                    aggregated_stats['scores_min'] = min(current_min, batch_min)
 
-                        # Extract keywords from title
-                        title = article.get('title', '')
-                        keywords = self._extract_keywords(title)
-                        all_keywords.update(keywords)
+                if current_max is None:
+                    aggregated_stats['scores_max'] = batch_max
+                else:
+                    aggregated_stats['scores_max'] = max(current_max, batch_max)
 
-                        score = article.get('score', 0.0)
-                        if isinstance(score, (int, float)):
-                            scores.append(score)
+            # Build profile
+            self.preference_profile = self._build_profile_from_stats(aggregated_stats)
 
-            # Build preference profile
-            total_selections = len(all_selected_articles)
-            total_available = len(all_available_articles)
-
-            self.preference_profile.total_selections = total_selections
-            self.preference_profile.total_available = total_available
-            self.preference_profile.selection_rate = (
-                total_selections / total_available if total_available > 0 else 0.0
-            )
-
-            # Score thresholds
-            if scores:
-                self.preference_profile.score_threshold = min(scores)
-                self.preference_profile.score_range = (min(scores), max(scores))
-
-            # Normalize source preferences (higher = more selected)
-            if source_selections:
-                max_source_count = max(source_selections.values())
-                for source, count in source_selections.items():
-                    # Boost multiplier: 1.0-2.0x based on selection frequency
-                    boost = 1.0 + (count / max_source_count)
-                    self.preference_profile.source_preferences[source] = boost
-
-                # Top sources
-                self.preference_profile.preferred_sources = [
-                    source for source, _ in source_selections.most_common(5)
-                ]
-
-            # Normalize category preferences
-            if category_selections:
-                max_category_count = max(category_selections.values())
-                for category, count in category_selections.items():
-                    boost = 1.0 + (count / max_category_count)
-                    self.preference_profile.category_preferences[category] = boost
-
-                # Top categories
-                self.preference_profile.preferred_categories = [
-                    cat for cat, _ in category_selections.most_common(5)
-                ]
-
-            # Store top keywords
-            self.preference_profile.keyword_preferences = dict(all_keywords.most_common(20))
+            # Save cache
+            all_processed_files = list(cached_files | {f.name for f in new_files})
+            self._save_cache(all_processed_files, aggregated_stats)
 
             # Mark as cached
             self._analysis_cached = True
@@ -188,7 +339,7 @@ class PersonalizationService:
 
             logger.info(
                 f"Analyzed {len(review_files)} reviews: "
-                f"{total_selections}/{total_available} selections ({self.preference_profile.selection_rate:.1%})"
+                f"{self.preference_profile.total_selections}/{self.preference_profile.total_available} selections ({self.preference_profile.selection_rate:.1%})"
             )
             logger.info(f"Top sources: {self.preference_profile.preferred_sources}")
             logger.info(f"Top categories: {self.preference_profile.preferred_categories}")
