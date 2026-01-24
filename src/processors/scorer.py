@@ -19,13 +19,13 @@ from sources.rss_fetcher import Article
 logger = logging.getLogger(__name__)
 
 
-def calculate_topic_score(article: Article, topics_config: dict) -> tuple[float, str]:
+def calculate_topic_score(article: Article, topics_config: any) -> tuple[float, str]:
     """
     Calculate topic relevance score and classify article.
 
     Args:
         article: Article to score
-        topics_config: Topics configuration dictionary
+        topics_config: Topics configuration (list of dicts or legacy dict)
 
     Returns:
         Tuple of (score_boost, matched_category)
@@ -39,6 +39,24 @@ def calculate_topic_score(article: Article, topics_config: dict) -> tuple[float,
         if not topics_config:
             return 0.0, ""
 
+        # Normalize topics to list
+        topics_list = []
+        if isinstance(topics_config, list):
+            topics_list = topics_config
+        elif isinstance(topics_config, dict):
+            # Legacy format support
+            for name, data in topics_config.items():
+                if isinstance(data, dict):
+                    item = data.copy()
+                    item.setdefault('name', name)
+                    item.setdefault('category', name)
+                    # Legacy priority_boost maps to priority
+                    item.setdefault('priority', item.get('priority_boost', 1.0))
+                    topics_list.append(item)
+
+        if not topics_list:
+            return 0.0, ""
+
         # Build text for matching (handle None values)
         title = article.title or ""
         summary = article.summary or ""
@@ -47,21 +65,21 @@ def calculate_topic_score(article: Article, topics_config: dict) -> tuple[float,
         best_score = 0.0
         best_category = ""
 
-        for category, config in topics_config.items():
-            if not config:
+        for topic in topics_list:
+            if not topic:
                 continue
 
-            keywords = config.get('keywords', [])
+            keywords = topic.get('keywords', [])
             if not keywords:
                 continue
 
-            boost = config.get('priority_boost', 1.0)
+            boost = topic.get('priority', topic.get('priority_boost', 1.0))
 
             # Validate boost
             try:
                 boost = float(boost)
             except (ValueError, TypeError):
-                logger.warning(f"Invalid boost value {boost} for category {category}, using 1.0")
+                logger.warning(f"Invalid boost value {boost}, using 1.0")
                 boost = 1.0
 
             # Count keyword matches
@@ -71,7 +89,7 @@ def calculate_topic_score(article: Article, topics_config: dict) -> tuple[float,
                 category_score = matches * boost
                 if category_score > best_score:
                     best_score = category_score
-                    best_category = category
+                    best_category = topic.get('category', topic.get('name', ''))
 
         return best_score, best_category
 

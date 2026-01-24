@@ -122,6 +122,20 @@ class ConfigError(Exception):
     pass
 
 
+def _convert_legacy_topics(raw_topics: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Convert legacy dictionary format for topics to list format."""
+    topics_list = []
+    for topic_name, topic_data in raw_topics.items():
+        if isinstance(topic_data, dict):
+            topics_list.append({
+                'name': topic_name,
+                'keywords': topic_data.get('keywords', []),
+                'category': topic_data.get('category', topic_name),
+                'priority': topic_data.get('priority_boost', 1.0)
+            })
+    return topics_list
+
+
 def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
     """
     Load and validate configuration from YAML file.
@@ -157,22 +171,12 @@ def load_config(config_path: Optional[Path] = None) -> Dict[str, Any]:
 
     # Fix topics format if it's a dict instead of list
     if isinstance(raw_config.get('topics'), dict):
-        # Convert dict format to list format
-        topics_list = []
-        for topic_name, topic_data in raw_config.get('topics', {}).items():
-            if isinstance(topic_data, dict):
-                topics_list.append({
-                    'name': topic_name,
-                    'keywords': topic_data.get('keywords', []),
-                    'category': topic_data.get('category', topic_name),
-                    'priority': topic_data.get('priority_boost', 1.0)
-                })
-        raw_config['topics'] = topics_list
+        raw_config['topics'] = _convert_legacy_topics(raw_config['topics'])
 
     # Validate with Pydantic
     try:
         validated = FullConfig(**raw_config)
-        return validated.dict()
+        return validated.model_dump()
     except ValidationError as e:
         error_details = "\n".join([
             f"  - {err['loc'][0]}: {err['msg']}"
