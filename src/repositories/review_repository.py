@@ -141,10 +141,14 @@ class ReviewRepository:
             logger.warning("Cannot update selections on None review_data")
             return review_data
 
-        # Reset all selections
+        # Create lookup map and reset selections
+        article_map = {}
         for cat_name, articles in review_data.get('categories', {}).items():
+            article_map[cat_name] = {}
             for article in articles:
                 article['selected'] = False
+                if 'id' in article:
+                    article_map[cat_name][article['id']] = article
 
         # Mark selected articles
         selected_articles = []
@@ -153,13 +157,11 @@ class ReviewRepository:
                 cat_name, article_id = sel_id.split(':')
                 article_id = int(article_id)
 
-                if cat_name in review_data['categories']:
-                    for article in review_data['categories'][cat_name]:
-                        if article['id'] == article_id:
-                            article['selected'] = True
-                            article['category'] = cat_name
-                            selected_articles.append(article)
-                            break
+                if cat_name in article_map and article_id in article_map[cat_name]:
+                    article = article_map[cat_name][article_id]
+                    article['selected'] = True
+                    article['category'] = cat_name
+                    selected_articles.append(article)
             except (ValueError, IndexError) as e:
                 logger.warning(f"Error parsing selection ID '{sel_id}': {e}")
                 continue
