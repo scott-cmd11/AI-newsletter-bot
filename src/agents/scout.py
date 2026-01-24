@@ -12,6 +12,7 @@ import json
 import logging
 import feedparser
 import requests
+import concurrent.futures
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -239,6 +240,32 @@ def scrape_ground_truth_ag() -> List[Dict[str, Any]]:
     return articles
 
 
+def _process_source(source: Dict[str, Any], category: str) -> List[Dict[str, Any]]:
+    """
+    Helper function to process a single source.
+    """
+    articles = []
+    try:
+        if source['type'] == 'rss':
+            articles = fetch_rss_feed(
+                url=source['url'],
+                source_name=source['name'],
+                category=category
+            )
+        elif source['type'] == 'scrape':
+            # Handle specific scrapers
+            if 'proteinindustriescanada' in source['url']:
+                articles = scrape_protein_industries_canada()
+            elif 'groundtruth' in source['url']:
+                articles = scrape_ground_truth_ag()
+            else:
+                logger.warning(f"No scraper implemented for: {source['name']}")
+    except Exception as e:
+        logger.error(f"Error processing source {source.get('name', 'unknown')}: {e}")
+
+    return articles
+
+
 def run_scout() -> Dict[str, Any]:
     """
     Execute the Scout agent: fetch all sources and aggregate results.
@@ -254,31 +281,24 @@ def run_scout() -> Dict[str, Any]:
     logger.info("=" * 60)
 
     # Process each category in SOURCE_MAP
-    for category, sources in SOURCE_MAP.items():
-        category_counts[category] = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_category = {}
 
-        for source in sources:
-            if source['type'] == 'rss':
-                articles = fetch_rss_feed(
-                    url=source['url'],
-                    source_name=source['name'],
-                    category=category
-                )
-                all_articles.extend(articles)
-                category_counts[category] += len(articles)
+        for category, sources in SOURCE_MAP.items():
+            category_counts[category] = 0
+            for source in sources:
+                future = executor.submit(_process_source, source, category)
+                future_to_category[future] = category
 
-            elif source['type'] == 'scrape':
-                # Handle specific scrapers
-                if 'proteinindustriescanada' in source['url']:
-                    articles = scrape_protein_industries_canada()
-                elif 'groundtruth' in source['url']:
-                    articles = scrape_ground_truth_ag()
-                else:
-                    logger.warning(f"No scraper implemented for: {source['name']}")
-                    articles = []
-
-                all_articles.extend(articles)
-                category_counts[category] += len(articles)
+        for future in concurrent.futures.as_completed(future_to_category):
+            category = future_to_category[future]
+            try:
+                articles = future.result()
+                if articles:
+                    all_articles.extend(articles)
+                    category_counts[category] += len(articles)
+            except Exception as e:
+                logger.error(f"An error occurred during source processing: {e}")
 
     # Build the report
     report = {
