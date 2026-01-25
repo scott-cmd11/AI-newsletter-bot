@@ -1,0 +1,3 @@
+## 2025-02-18 - Clickable Cards & Accessible Checkboxes
+**Learning:** Users expect "card" interfaces (like article lists) to be fully clickable, not just the small checkbox. This improves interaction speed significantly. However, blindly adding click handlers can conflict with nested interactive elements (links, buttons).
+**Action:** Always make list item cards clickable for selection/navigation, but ensure the click handler explicitly ignores nested interactive elements (`a`, `button`, `input`) to prevent conflict. Always pair implicit selection mechanisms with explicit, accessible labels (`aria-label`) on the underlying inputs.
