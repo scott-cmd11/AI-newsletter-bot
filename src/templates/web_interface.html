@@ -175,6 +175,7 @@
             gap: 15px;
             align-items: flex-start;
             transition: all 0.2s;
+            cursor: pointer;
         }
         .article:hover {
             background: #2a2a50;
@@ -332,6 +333,7 @@
                         <input type="checkbox"
                                name="selected"
                                value="{{ cat_name }}:{{ article.id }}"
+                               aria-label="Select {{ article.title }}"
                                {% if article.selected %}checked{% endif %}
                                onchange="updateCount()">
                         <div class="article-content">
@@ -395,6 +397,13 @@
         }
 
         function generateNewsletter() {
+            const btn = document.getElementById('generate-btn');
+            if (btn) {
+                btn.innerHTML = '⏳ Generating...';
+                btn.disabled = true;
+                btn.style.opacity = '0.7';
+            }
+
             const form = document.getElementById('article-form');
             const formData = new FormData(form);
 
@@ -409,6 +418,18 @@
 
         // Initialize count
         updateCount();
+
+        // Make cards clickable
+        document.querySelectorAll('.article').forEach(article => {
+            article.addEventListener('click', function(e) {
+                // Ignore clicks on links or the checkbox itself (to avoid double toggle)
+                if (e.target.closest('a') || e.target.type === 'checkbox') return;
+
+                const checkbox = this.querySelector('input[type="checkbox"]');
+                checkbox.checked = !checkbox.checked;
+                updateCount();
+            });
+        });
 
         // Progress tracking
         let progressInterval = null;
