@@ -1,0 +1,3 @@
+## 2024-05-23 - Sequential RSS Fetching Bottleneck
+**Learning:** Network I/O operations like RSS feed fetching are extremely blocking when done sequentially. In `src/sources/rss_fetcher.py`, fetching feeds one by one caused a linear increase in execution time (e.g., 5 feeds @ 1s each = 5s total).
+**Action:** Use `concurrent.futures.ThreadPoolExecutor` to parallelize I/O-bound tasks. By fetching feeds concurrently, the total time is reduced to roughly the duration of the slowest single request. Always look for loops performing network requests and consider if order matters; if not, parallelize.
