@@ -175,6 +175,7 @@
             gap: 15px;
             align-items: flex-start;
             transition: all 0.2s;
+            cursor: pointer;
         }
         .article:hover {
             background: #2a2a50;
@@ -330,6 +331,7 @@
                     {% for article in articles[:10] %}
                     <div class="article {% if article.selected %}selected{% endif %}" data-score="{{ article.score }}">
                         <input type="checkbox"
+                               aria-label="Select {{ article.title }}"
                                name="selected"
                                value="{{ cat_name }}:{{ article.id }}"
                                {% if article.selected %}checked{% endif %}
@@ -359,7 +361,7 @@
 
         <div class="selected-count" id="floating-count" style="display: none;">
             <span><strong id="float-count">0</strong> articles selected</span>
-            <button onclick="generateNewsletter()" class="btn btn-primary">Generate →</button>
+            <button onclick="generateNewsletter()" class="btn btn-primary" id="generate-floating-btn">Generate →</button>
         </div>
         {% endif %}
     </div>
@@ -395,6 +397,18 @@
         }
 
         function generateNewsletter() {
+            const btn = document.getElementById('generate-btn');
+            const floatBtn = document.getElementById('generate-floating-btn');
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Generating...';
+            }
+            if (floatBtn) {
+                floatBtn.disabled = true;
+                floatBtn.innerHTML = '⏳ Generating...';
+            }
+
             const form = document.getElementById('article-form');
             const formData = new FormData(form);
 
@@ -404,8 +418,31 @@
                 body: formData
             }).then(() => {
                 window.location.href = '{{ url_for("generate") }}';
+            }).catch(err => {
+                console.error(err);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '📧 Generate Newsletter';
+                }
+                if (floatBtn) {
+                    floatBtn.disabled = false;
+                    floatBtn.innerHTML = 'Generate →';
+                }
+                alert('Error generating newsletter');
             });
         }
+
+        // Make articles clickable
+        document.querySelectorAll('.article').forEach(article => {
+            article.addEventListener('click', function(e) {
+                // Ignore clicks on links or the checkbox itself
+                if (e.target.closest('a') || e.target.type === 'checkbox') return;
+
+                const checkbox = this.querySelector('input[type="checkbox"]');
+                checkbox.checked = !checkbox.checked;
+                updateCount();
+            });
+        });
 
         // Initialize count
         updateCount();
