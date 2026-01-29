@@ -287,82 +287,72 @@
             <div class="progress-message" id="progress-message"></div>
         </div>
 
-        {% if not data %}
-        <div class="empty-state">
-            <h3>No articles loaded</h3>
-            <p style="margin-bottom: 20px;">Click "Fetch New Articles" to get the latest from your feeds.</p>
-            <a href="{{ url_for('fetch_articles') }}" class="btn btn-primary">🔄 Fetch New Articles</a>
-        </div>
-        {% else %}
+
 
         <div class="stats">
             <div class="stat">
-                <div class="stat-value">{{ data.total_articles }}</div>
+                <div class="stat-value">1</div>
                 <div class="stat-label">Total Articles</div>
             </div>
             <div class="stat">
-                <div class="stat-value" id="selected-count">{{ data.selected|length }}</div>
+                <div class="stat-value" id="selected-count">0</div>
                 <div class="stat-label">Selected</div>
             </div>
             <div class="stat">
-                <div class="stat-value">{{ data.categories|length }}</div>
+                <div class="stat-value">1</div>
                 <div class="stat-label">Categories</div>
             </div>
         </div>
 
         <div class="actions">
-            <a href="{{ url_for('fetch_articles') }}" class="btn btn-secondary">🔄 Refresh Articles</a>
+            <a href="/fetch" class="btn btn-secondary">🔄 Refresh Articles</a>
             <button onclick="selectTop()" class="btn btn-secondary">⭐ Auto-Select Top 8</button>
             <button onclick="generateNewsletter()" class="btn btn-success" id="generate-btn">📧 Generate Newsletter</button>
         </div>
 
-        <form id="article-form" method="POST" action="{{ url_for('save_selection') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            {% for cat_name, articles in data.categories.items() %}
+        <form id="article-form" method="POST" action="/save">
+            <input type="hidden" name="csrf_token" value="mock-token-123">
+
             <div class="category">
                 <div class="category-header">
                     <h2>
-                        {% if cat_name == 'governance' %}⚖️{% elif cat_name == 'capabilities' %}🚀{% elif cat_name == 'business' %}💼{% elif cat_name == 'tools' %}🛠️{% elif cat_name == 'education' %}📚{% else %}📰{% endif %}
-                        {{ cat_name|title }}
+                        📰
+                        Test_cat
                     </h2>
-                    <span class="count">{{ articles|length }} articles</span>
+                    <span class="count">1 articles</span>
                 </div>
                 <div class="articles">
-                    {% for article in articles[:10] %}
-                    <div class="article {% if article.selected %}selected{% endif %}" data-score="{{ article.score }}">
+
+                    <div class="article " data-score="5.0">
                         <input type="checkbox"
                                name="selected"
-                               value="{{ cat_name }}:{{ article.id }}"
-                               {% if article.selected %}checked{% endif %}
+                               value="test_cat:1"
+
                                onchange="updateCount()">
                         <div class="article-content">
                             <div class="article-title">
-                                <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
+                                <a href="http://example.com" target="_blank">Test Article</a>
                             </div>
                             <div class="article-meta">
-                                <span class="article-score">{{ "%.1f"|format(article.score) }}</span>
-                                <span>📰 {{ article.source }}</span>
-                                {% if article.published %}
-                                <span>📅 {{ article.published[:10] }}</span>
-                                {% endif %}
+                                <span class="article-score">5.0</span>
+                                <span>📰 Test</span>
+
                             </div>
-                            <div class="article-summary">{{ article.summary[:200] }}{% if article.summary|length > 200 %}...{% endif %}</div>
+                            <div class="article-summary">Summary</div>
                         </div>
                     </div>
-                    {% endfor %}
-                    {% if articles|length > 10 %}
-                    <p style="text-align: center; padding: 15px; color: #666;">+ {{ articles|length - 10 }} more articles</p>
-                    {% endif %}
+
+
                 </div>
             </div>
-            {% endfor %}
+
         </form>
 
         <div class="selected-count" id="floating-count" style="display: none;">
             <span><strong id="float-count">0</strong> articles selected</span>
             <button onclick="generateNewsletter()" class="btn btn-primary">Generate →</button>
         </div>
-        {% endif %}
+
     </div>
 
     <script>
@@ -400,11 +390,11 @@
             const formData = new FormData(form);
 
             // Save selections first
-            fetch('{{ url_for("save_selection") }}', {
+            fetch('/save', {
                 method: 'POST',
                 body: formData
             }).then(() => {
-                window.location.href = '{{ url_for("generate") }}';
+                window.location.href = '/generate';
             });
         }
 
@@ -427,7 +417,7 @@
         }
 
         function updateProgressBar() {
-            fetch('{{ url_for("get_progress") }}')
+            fetch('/api/progress')
                 .then(response => response.json())
                 .then(data => {
                     const fill = document.getElementById('progress-fill');
