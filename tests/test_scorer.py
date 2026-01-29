@@ -58,10 +58,20 @@ class TestScoringFunctions(unittest.TestCase):
             ]
         }
 
+        # Create preprocessed topics for direct function testing
+        self.processed_topics = []
+        for t in self.config['topics']:
+            self.processed_topics.append({
+                'category': t.get('category'),
+                'priority': t.get('priority', 1.0),
+                'keywords': [k.lower() for k in t.get('keywords', [])]
+            })
+
     def test_topic_score_matches_keywords(self):
         """Test that topic score increases for keyword matches."""
-        score = calculate_topic_score(self.article_recent, self.config)
+        score, category = calculate_topic_score(self.article_recent, self.processed_topics)
         self.assertGreater(score, 0, "Article with matching keywords should have positive score")
+        self.assertEqual(category, 'capabilities')
 
     def test_topic_score_no_match(self):
         """Test that articles without matching keywords get score 0."""
@@ -73,13 +83,13 @@ class TestScoringFunctions(unittest.TestCase):
             summary="No relevant keywords here",
             category="other"
         )
-        score = calculate_topic_score(article, self.config)
+        score, category = calculate_topic_score(article, self.processed_topics)
         self.assertEqual(score, 0, "Article without keywords should have zero topic score")
 
     def test_recency_score_recent_article(self):
         """Test that recent articles get higher recency scores."""
-        score_recent = calculate_recency_score(self.article_recent, days_old=0)
-        score_old = calculate_recency_score(self.article_old, days_old=10)
+        score_recent = calculate_recency_score(self.article_recent)
+        score_old = calculate_recency_score(self.article_old)
         self.assertGreater(score_recent, score_old, "Recent articles should score higher")
 
     def test_priority_score_high_priority(self):
@@ -211,9 +221,8 @@ class TestScorerEdgeCases(unittest.TestCase):
             published=datetime.now(),
             summary="Summary"
         )
-        config = {'topics': []}
-        # Should not raise an error
-        score = calculate_topic_score(article, config)
+        # Empty preprocessed list
+        score, category = calculate_topic_score(article, [])
         self.assertIsNotNone(score)
 
     def test_article_with_no_summary(self):
@@ -225,8 +234,7 @@ class TestScorerEdgeCases(unittest.TestCase):
             published=datetime.now(),
             summary=""
         )
-        config = {'topics': []}
-        score = calculate_topic_score(article, config)
+        score, category = calculate_topic_score(article, [])
         self.assertIsNotNone(score)
 
     def test_empty_articles_list(self):
