@@ -9,12 +9,13 @@ import os
 import json
 import logging
 import webbrowser
+import secrets
 from datetime import datetime
 from pathlib import Path
 from threading import Timer
 from functools import wraps
 
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response
+from flask import Flask, render_template_string, request, redirect, url_for, jsonify, Response, session, abort
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,33 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-in-production')
 
 # Password protection - set AUTH_PASSWORD env var in Railway
 AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', '')
+
+def csrf_token():
+    """Generate or retrieve CSRF token."""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+    return session['csrf_token']
+
+app.jinja_env.globals['csrf_token'] = csrf_token
+
+@app.before_request
+def check_csrf():
+    """Check CSRF token on POST requests."""
+    if request.method == "POST":
+        token = session.get('csrf_token')
+        if not token:
+            logger.warning("CSRF token missing from session")
+            abort(403)
+
+        request_token = request.form.get('csrf_token') or request.headers.get('X-CSRFToken')
+
+        # Check JSON requests too
+        if not request_token and request.is_json:
+            request_token = (request.json or {}).get('csrf_token')
+
+        if not request_token or not secrets.compare_digest(token, request_token):
+            logger.warning("Invalid or missing CSRF token in request")
+            abort(403)
 
 def check_auth(password):
     """Check if the password is correct."""
