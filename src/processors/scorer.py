@@ -19,53 +19,32 @@ from sources.rss_fetcher import Article
 logger = logging.getLogger(__name__)
 
 
-def calculate_topic_score(article: Article, topics_config: dict) -> tuple[float, str]:
+def calculate_topic_score(text_lower: str, processed_topics: List[dict]) -> tuple[float, str]:
     """
     Calculate topic relevance score and classify article.
 
     Args:
-        article: Article to score
-        topics_config: Topics configuration dictionary
+        text_lower: Lowercased article text (title + summary)
+        processed_topics: List of processed topic configurations
 
     Returns:
         Tuple of (score_boost, matched_category)
     """
     try:
         # Validate inputs
-        if not article:
-            logger.warning("calculate_topic_score called with None article")
+        if not processed_topics:
             return 0.0, ""
-
-        if not topics_config:
-            return 0.0, ""
-
-        # Build text for matching (handle None values)
-        title = article.title or ""
-        summary = article.summary or ""
-        text = f"{title} {summary}".lower()
 
         best_score = 0.0
         best_category = ""
 
-        for category, config in topics_config.items():
-            if not config:
-                continue
+        for topic in processed_topics:
+            keywords = topic['keywords']
+            boost = topic['priority_boost']
+            category = topic['category']
 
-            keywords = config.get('keywords', [])
-            if not keywords:
-                continue
-
-            boost = config.get('priority_boost', 1.0)
-
-            # Validate boost
-            try:
-                boost = float(boost)
-            except (ValueError, TypeError):
-                logger.warning(f"Invalid boost value {boost} for category {category}, using 1.0")
-                boost = 1.0
-
-            # Count keyword matches
-            matches = sum(1 for kw in keywords if kw and kw.lower() in text)
+            # Count keyword matches - keywords are already lowercased in processed_topics
+            matches = sum(1 for kw in keywords if kw in text_lower)
 
             if matches > 0:
                 category_score = matches * boost
@@ -80,13 +59,12 @@ def calculate_topic_score(article: Article, topics_config: dict) -> tuple[float,
         return 0.0, ""
 
 
-def calculate_canadian_score(article: Article, canadian_keywords: List[str], boost: float) -> float:
+def calculate_canadian_score(text_lower: str, canadian_keywords: List[str], boost: float) -> float:
     """
     Calculate Canadian content relevance boost.
     """
-    text = f"{article.title} {article.summary}".lower()
-    
-    matches = sum(1 for kw in canadian_keywords if kw.lower() in text)
+    # canadian_keywords are expected to be lowercased
+    matches = sum(1 for kw in canadian_keywords if kw in text_lower)
     
     if matches > 0:
         return boost * min(matches, 3)  # Cap at 3x multiplier
@@ -126,14 +104,13 @@ def calculate_priority_score(article: Article) -> float:
     return priority_map.get(article.priority, 1.0)
 
 
-def should_exclude(article: Article, exclude_patterns: List[str]) -> bool:
+def should_exclude(text_lower: str, exclude_patterns: List[str]) -> bool:
     """
     Check if article should be excluded based on patterns.
     """
-    text = f"{article.title} {article.summary}".lower()
-    
+    # exclude_patterns are expected to be lowercased
     for pattern in exclude_patterns:
-        if pattern.lower() in text:
+        if pattern in text_lower:
             return True
     return False
 
@@ -150,20 +127,74 @@ def score_articles(articles: List[Article], config: dict) -> List[Article]:
         List of scored and sorted articles (highest score first)
     """
     topics_config = config.get('topics', {})
-    canadian_keywords = config.get('canadian_keywords', [])
+
+    # Pre-process topics configuration
+    processed_topics = []
+    if topics_config:
+        if isinstance(topics_config, list):
+            # Handle list format (from tests or newer config)
+            for item in topics_config:
+                category = item.get('category', item.get('name', 'unknown'))
+                keywords = item.get('keywords', [])
+                if not keywords:
+                    continue
+
+                processed_keywords = [k.lower() for k in keywords if k]
+
+                try:
+                    boost = float(item.get('priority', item.get('priority_boost', 1.0)))
+                except (ValueError, TypeError):
+                    boost = 1.0
+
+                processed_topics.append({
+                    'category': category,
+                    'keywords': processed_keywords,
+                    'priority_boost': boost
+                })
+        else:
+            # Handle dictionary format
+            for category, cat_config in topics_config.items():
+                if not cat_config:
+                    continue
+
+                keywords = cat_config.get('keywords', [])
+                if not keywords:
+                    continue
+
+                # Pre-lowercase keywords
+                processed_keywords = [k.lower() for k in keywords if k]
+
+                # Validate boost
+                try:
+                    boost = float(cat_config.get('priority_boost', 1.0))
+                except (ValueError, TypeError):
+                    boost = 1.0
+
+                processed_topics.append({
+                    'category': category,
+                    'keywords': processed_keywords,
+                    'priority_boost': boost
+                })
+
+    canadian_keywords = [k.lower() for k in config.get('canadian_keywords', []) if k]
     canadian_boost = config.get('canadian_boost', 1.5)
-    exclude_patterns = config.get('exclude_patterns', [])
+    exclude_patterns = [p.lower() for p in config.get('exclude_patterns', []) if p]
     
     scored_articles = []
     
     for article in articles:
+        # Pre-calculate lowercased text once per article
+        title = article.title or ""
+        summary = article.summary or ""
+        text_lower = f"{title} {summary}".lower()
+
         # Check exclusions
-        if should_exclude(article, exclude_patterns):
+        if should_exclude(text_lower, exclude_patterns):
             continue
             
         # Calculate component scores
-        topic_score, category = calculate_topic_score(article, topics_config)
-        canadian_multiplier = calculate_canadian_score(article, canadian_keywords, canadian_boost)
+        topic_score, category = calculate_topic_score(text_lower, processed_topics)
+        canadian_multiplier = calculate_canadian_score(text_lower, canadian_keywords, canadian_boost)
         recency_score = calculate_recency_score(article)
         priority_score = calculate_priority_score(article)
         
