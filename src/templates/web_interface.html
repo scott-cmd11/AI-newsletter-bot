@@ -317,6 +317,7 @@
         </div>
 
         <form id="article-form" method="POST" action="{{ url_for('save_selection') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% for cat_name, articles in data.categories.items() %}
             <div class="category">
                 <div class="category-header">
