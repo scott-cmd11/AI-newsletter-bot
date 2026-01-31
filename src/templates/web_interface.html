@@ -175,6 +175,7 @@
             gap: 15px;
             align-items: flex-start;
             transition: all 0.2s;
+            cursor: pointer;
         }
         .article:hover {
             background: #2a2a50;
@@ -333,7 +334,8 @@
                                name="selected"
                                value="{{ cat_name }}:{{ article.id }}"
                                {% if article.selected %}checked{% endif %}
-                               onchange="updateCount()">
+                               onchange="updateCount()"
+                               aria-label="Select {{ article.title }}">
                         <div class="article-content">
                             <div class="article-title">
                                 <a href="{{ article.url }}" target="_blank">{{ article.title }}</a>
@@ -409,6 +411,20 @@
 
         // Initialize count
         updateCount();
+
+        // Clickable Cards Logic
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.article').forEach(article => {
+                article.addEventListener('click', function(e) {
+                    // Ignore if clicked on link or checkbox directly
+                    if (e.target.closest('a') || e.target.tagName === 'INPUT') return;
+
+                    const checkbox = this.querySelector('input[type="checkbox"]');
+                    checkbox.checked = !checkbox.checked;
+                    updateCount();
+                });
+            });
+        });
 
         // Progress tracking
         let progressInterval = null;
